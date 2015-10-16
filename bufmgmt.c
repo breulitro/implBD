@@ -3,8 +3,9 @@
 #include <unistd.h>
 #include <string.h>
 
+#define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
-#define CONTROL 0
+#define CONTROL DATABLOCK * 2
 
 typedef struct Buffer {
 	int id;
@@ -101,6 +102,8 @@ void bufmgmt_persist() {
 typedef struct {
 	int header_len;
 	int free;
+	int next;
+	int prev;
 } DBHeader;
 
 typedef struct {
@@ -109,32 +112,54 @@ typedef struct {
 	int next;
 } EntryHeader;
 
+typedef struct {
+	char bitmap[268435456 / DATABLOCK / 8];
+	int root;
+	int table;
+} Config;
+
 void init_database() {
 	FILE *fd;
 	DBHeader *dbh;
 	char buf[DATABLOCK];
+	Config *conf;
 
 	fd = fopen(".datafile", "w");
-	if (ftruncate(fileno(fd), DATABLOCK * 100000) < 0)
+	if (ftruncate(fileno(fd), FILESIZE) < 0)
 		perror("ftruncate");
 	fclose(fd);
 
 	fd = fopen(".datafile", "w");
 	if (!fd)
 		perror("Criando datafile"), exit(1);
+/*
+	// Escrevendo configuração
+	conf = malloc(sizeof(Config));
+	bzero(conf, sizeof(Config));
+	conf->root = 666;
+	printf("rooot = %d\n", conf->root);
+	fwrite(conf, sizeof(Config), 1, fd);
+*/
+	int val = 666;
+	fwrite(&val, 1, sizeof(int), fd);
+	puts("asdfasdfasdf");
 
-	for (int i = 0; i < 1000; i++) {
+	fseek(fd, DATABLOCK * 2, SEEK_SET);
+	for (int i = 2; i < FILESIZE / DATABLOCK; i++) {
 		dbh = &buf[DATABLOCK - 1] - sizeof(DBHeader);
 		dbh->header_len = 666;
 		dbh->free = DATABLOCK - sizeof(DBHeader) - dbh->header_len * sizeof(EntryHeader);
 		fwrite(buf, 1, DATABLOCK, fd);
 	}
+
+	printf("datafile created\n");
 	fclose(fd);
 }
 
 int main() {
 	Buffer *b;
 	DBHeader *dbh;
+	Config *conf;
 	FILE *fd = fopen(".datafile", "r");
 	if (!fd) {
 		printf("First run\n");
@@ -143,7 +168,6 @@ int main() {
 
 	fclose(fd);
 
-	printf("File created\n");
 	for (int i = 0; i < 256; i++) {
 		b = get_datablock(i);
 		sprintf(b->datablock, "{Object:%d, services: [svc1, svc2]}", i);
@@ -160,5 +184,12 @@ int main() {
 	printf("header_len = %d\n", dbh->header_len);
 	printf("hit = %d, miss = %d\n", hit, miss);
 	bufmgmt_persist();
+
+	fd = fopen(".datafile", "r");
+	fseek(fd, 0, SEEK_SET);
+	int foo;
+	fread(&foo, 1, sizeof(int), fd);
+	printf("root = %d\n", foo);
+	fclose(fd);
 	return 0;
 }
