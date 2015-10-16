@@ -8,7 +8,7 @@
 
 typedef struct Buffer {
 	int id;
-	void *datablock;
+	char *datablock;
 	char dirty;
 	char used;
 } Buffer;
@@ -98,14 +98,48 @@ void bufmgmt_persist() {
 	fclose(fd);
 }
 
-int main() {
-	Buffer *b;
-	FILE *fd = fopen(".datafile", "w+");
-	if(!fd)
-		perror("deu merda");
+typedef struct {
+	int header_len;
+	int free;
+} DBHeader;
 
+typedef struct {
+	short row;
+	short id;
+	int next;
+} EntryHeader;
+
+void init_database() {
+	FILE *fd;
+	DBHeader *dbh;
+	char buf[DATABLOCK];
+
+	fd = fopen(".datafile", "w");
 	if (ftruncate(fileno(fd), DATABLOCK * 100000) < 0)
 		perror("ftruncate");
+	fclose(fd);
+
+	fd = fopen(".datafile", "w");
+	if (!fd)
+		perror("Criando datafile"), exit(1);
+
+	for (int i = 0; i < 1000; i++) {
+		dbh = &buf[DATABLOCK - 1] - sizeof(DBHeader);
+		dbh->header_len = 666;
+		dbh->free = DATABLOCK - sizeof(DBHeader) - dbh->header_len * sizeof(EntryHeader);
+		fwrite(buf, 1, DATABLOCK, fd);
+	}
+	fclose(fd);
+}
+
+int main() {
+	Buffer *b;
+	DBHeader *dbh;
+	FILE *fd = fopen(".datafile", "r");
+	if (!fd) {
+		printf("First run\n");
+		init_database();
+	}
 
 	fclose(fd);
 
@@ -122,6 +156,8 @@ int main() {
 	b = get_datablock(12);
 	b = get_datablock(55);
 	printf("[select] %s\n", b->datablock);
+	dbh = &b->datablock[DATABLOCK - 1] - sizeof(DBHeader);
+	printf("header_len = %d\n", dbh->header_len);
 	printf("hit = %d, miss = %d\n", hit, miss);
 	bufmgmt_persist();
 	return 0;
