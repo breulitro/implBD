@@ -10,6 +10,9 @@
 #define CONTROLSIZE DATABLOCK * 3
 #define DATAFILE ".datafile"
 
+#define IS_USED(var, n) (var[n / 8] & (1 << (n % 8)))
+#define SET_USED(var, n) var[(n) / 8] |= (1 << ((n) % 8))
+
 typedef struct Buffer {
 	int id;
 	char *datablock;
@@ -153,28 +156,20 @@ void create_database() {
 
 	// Escrevendo configuração
 	bzero(&conf, sizeof(Config));
-	conf.root = 666;
+	// FIXME: Utilizar desse jeito mesmo, acho que é melhor não usar default...
+	conf.root = 0;
+	conf.table = 1;
+
+	// Seta como usado os 3 últimos buffers , ja que o buffer inicia em zero
+	//e tem um offset de 3 datablocks (CONTROLSIZE).
+	SET_USED(conf.bitmap, 2 * DATABLOCK - 1);
+	SET_USED(conf.bitmap, 2 * DATABLOCK - 2);
+	SET_USED(conf.bitmap, 2 * DATABLOCK - 3);
 	fwrite(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
-/*
-	for (int i = 3; i < FILESIZE / DATABLOCK; i++) {
-		fd = fopen(DATAFILE, "w");
-		assert(fd);
-		fseek(fd, CONTROLSIZE + i * DATABLOCK, SEEK_SET);
-		dbh = &buf[DATABLOCK - 1] - sizeof(DBHeader);
-		dbh->header_len = 666;
-		dbh->free = DATABLOCK - sizeof(DBHeader) - dbh->header_len * sizeof(EntryHeader);
-//		printf("writing on %zd\n", ftell(fd));
-		assert(fwrite(buf, 1, DATABLOCK, fd) == DATABLOCK);
-//		printf("%d < %d\n", ftell(fd), FILESIZE);
-		fclose(fd);
-	}
-*/
+
 	printf("datafile created\n");
 }
-
-#define IS_SET(var, n) (var[n / 8] & (1 << (n % 8)))
-#define SET(var, n) var[n / 8] |= (1 << (n % 8))
 
 void init_database() {
 	FILE *fd;
@@ -185,10 +180,10 @@ void init_database() {
 	fclose(fd);
 
 	for (i = 3; i < (FILESIZE / DATABLOCK / 8); i++) {
-		if (!IS_SET(conf.bitmap, i))
+		if (!IS_USED(conf.bitmap, i))
 			free_blocks = g_list_append(free_blocks, i);
 		else
-			printf("Datablock %d ocupado\n", i);
+			printf("Datablock %ld ocupado\n", i);
 	}
 }
 
@@ -223,7 +218,7 @@ int main() {
 	printf("header_len = %d\n", dbh->header_len);
 	printf("hit = %d, miss = %d\n", hit, miss);
 
-	SET(conf.bitmap, 666);
+	SET_USED(conf.bitmap, 666);
 	persist();
 
 	b = get_datablock(999);
