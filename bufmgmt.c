@@ -4,6 +4,8 @@
 #include <string.h>
 #include <assert.h>
 #include <glib.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
@@ -44,7 +46,6 @@ Buffer *get_datablock(int id) {
 	}
 	// Cache miss
 	miss++;
-	//printf("Cache miss\n");
 
 	// Caso NÃO esteja nos frames e o framebuffer ainda não estiver cheio
 	if (framesLen < 256) {
@@ -66,6 +67,8 @@ Buffer *get_datablock(int id) {
 		fclose(fd);
 		return &frames[framesLen++];
 	}
+
+	printf("Cache miss\n");
 
 	// Caso framebuffer estiver cheio
 	printf("frames cheio\n");
@@ -179,6 +182,7 @@ void init_database() {
 	fread(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
 
+	free_blocks = NULL;
 	for (i = 3; i < (FILESIZE / DATABLOCK / 8); i++) {
 		if (!IS_USED(conf.bitmap, i))
 			free_blocks = g_list_append(free_blocks, i);
@@ -187,21 +191,91 @@ void init_database() {
 	}
 }
 
+void select_cmd(char *params) {
+	printf("TBD\n");
+}
+
+void insert_cmd(char *params) {
+	printf("TBD\n");
+}
+
+void search_cmd(char *params) {
+	printf("TBD\n");
+}
+
+void delete_cmd(char *params) {
+	printf("TBD\n");
+}
+
+void load_cmd(char *params) {
+	printf("TBD\n");
+}
+
+void help() {
+	printf("Comandos disponiveis:\n"
+			"\t- insert <json>\n"
+			"\t- search <tag>\n"
+			"\t- select <pk>\n"
+			"\t- delete <pk>\n"
+			"\t- help\n");
+}
+
+void parse_cmds(char *full_cmd) {
+	char *cmd, *param;
+
+	param = NULL;
+	if (!(cmd = strtok_r(full_cmd, " ", &param)))
+		return;
+
+	if (!(strcmp(cmd, "insert")))
+		insert_cmd(param);
+	else if (!(strcmp(cmd, "select")))
+		select_cmd(param);
+	else if (!(strcmp(cmd, "search")))
+		search_cmd(param);
+	else if (!(strcmp(cmd, "delete")))
+		delete_cmd(param);
+	else if (!(strcmp(cmd, "load")))
+		load_cmd(param);
+	else if (!(strcmp(cmd, "help")))
+		help();
+	else
+		printf("cmd unknown.\n");
+}
+
 int main() {
+	char *cmd, *hist;
+	char prompt[] = "sgbd> ";
 	Buffer *b;
 	DBHeader *dbh;
-	FILE *fd = fopen(DATAFILE, "r");
-	if (!fd) {
+	FILE *fd;
+
+	// Testa para ver se já existe DATAFILE
+	if ((fd = fopen(DATAFILE, "r")) != 0)
+		fclose(fd);
+	else {
 		printf("First run\n");
 		create_database();
 	}
-	if (fd)
-		fclose(fd);
 
+	// Inicializa as estruturas de controle do programa.
 	init_database();
+	printf("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
-	printf("temos %d datablocks livres\n", g_list_length(free_blocks));
+	do {
+		cmd = readline(prompt);
+		if (!strcmp(cmd, "exit") || !strcmp(cmd, "quit")){
+			break;
+		}
+		hist = strdup(cmd);
+		parse_cmds(cmd);
+		free(cmd);
+		if (hist && *hist)
+			add_history(hist);
+	} while (1);
 
+	clear_history();
+/*
 	for (int i = 0; i < 256; i++) {
 		b = get_datablock(i);
 		sprintf(b->datablock, "{Object:%d, services: [svc1, svc2]}", i);
@@ -230,5 +304,6 @@ int main() {
 	fread(&conf, sizeof(Config), 1, fd);
 	printf("root = %d\n", conf.root);
 	fclose(fd);
+*/
 	return 0;
 }
