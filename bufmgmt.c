@@ -289,6 +289,13 @@ typedef struct {
 	char *json;
 } TableEntry;
 
+void free_table_entry(gpointer data) {
+	TableEntry *te = data;
+
+	free(te->json);
+	free(te);
+}
+
 void search_cmd(char *params) {
 	Buffer *b;
 	DBHeader *dbh;
@@ -327,6 +334,8 @@ void search_cmd(char *params) {
 		te = x->data;
 		printf("%d - %s\n", te->pk, te->json);
 	}
+
+	g_list_free_full(l, free_table_entry);
 }
 
 void delete_cmd(char *params) {
