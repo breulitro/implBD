@@ -411,6 +411,12 @@ void select_cmd(char *params) {
 	b = get_datablock(id);
 	dbh = DBH(b->datablock);
 	eh = EH(dbh, row + 1);// Row começa em 1
+
+	if (!eh->pk) {
+		printf("Documento deletado\n");
+		return;
+	}
+
 	buf = malloc(eh->offset + 1);
 	memcpy(buf, &b->datablock[eh->init], eh->offset);
 	buf[eh->offset] = 0;
@@ -474,7 +480,22 @@ void search_cmd(char *params) {
 }
 
 void delete(char *datablock, short row) {
-	printf("TBD\n");
+	DBHeader *dbh;
+	EntryHeader *eh, *ehaux;
+
+	dbh = DBH(datablock);
+	eh = EH(dbh, row + 1);
+
+	// Como não da pra mudar o RowId, o datablock fica com um EntryHeader queimado
+	eh->pk = 0; // pk começa em 1, 0 indica que o EntryHeader é inválido
+	if (row + 1 < dbh->header_len) {
+		// Caso não seja o último row do datablock, desfragmentamos
+		ehaux = EH(dbh, row + 2);
+		memcpy(&datablock[eh->init], &datablock[ehaux->init], dbh->next_init - ehaux->init);
+		ehaux->init = eh->init;
+		// ehaux->offset continua o mesmo
+	}
+
 }
 
 void delete_cmd(char *params) {
@@ -482,11 +503,10 @@ void delete_cmd(char *params) {
 	short row, id;
 	Buffer *b;
 
-	brow = strtok_r(params, ":", &bid);
-	row = atoi(brow);
+	bid = strtok_r(params, ":", &brow);
 	id = atoi(bid);
+	row = atoi(brow);
 
-	printf("Row %d, id %d\n", row, id);
 	b = get_datablock(id);
 	delete(b->datablock, row);
 }
