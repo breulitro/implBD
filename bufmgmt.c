@@ -582,6 +582,8 @@ void help() {
 			"\t- delete <pk>\n"
 			"\t- load <file>\n"
 			"\t- persist\n"
+			"\t- exit\n"
+			"\t- quit\n"
 			"\t- help\n");
 }
 
@@ -676,6 +678,7 @@ int main() {
 			"Trabalho: Mini Simulador de Sistema de Gestao de Metadados\n"
 			"Professor: Eduardo Henrique Pereira de Arruda\n"
 			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n\n");
+	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n");
 	// Testa para ver se já existe DATAFILE
 	if ((fd = fopen(DATAFILE, "r")) != 0)
 		fclose(fd);
