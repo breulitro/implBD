@@ -9,7 +9,6 @@
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
-#define CONTROLSIZE DATABLOCK * 3
 #define DATAFILE ".datafile"
 
 #define IS_USED(bmap, n) (bmap[n / 8] & (1 << (n % 8)))
@@ -63,7 +62,7 @@ Buffer *get_datablock(int id) {
 		frames[framesLen].dirty = 0;
 		frames[framesLen].used = 0;
 
-		if (fseek(fd, CONTROLSIZE + id * DATABLOCK, SEEK_SET) < 0)
+		if (fseek(fd, id * DATABLOCK, SEEK_SET) < 0)
 			perror("fseek");
 
 		printf("Reading @ %ld\n", ftell(fd));
@@ -83,7 +82,7 @@ Buffer *get_datablock(int id) {
 	// Se buffer tiver sido alterado, salva ele (write back policy)
 	if (frames[vitima].dirty) {
 		fd = fopen(DATAFILE, "r+");
-		assert(!fseek(fd, CONTROLSIZE + frames[vitima].id * DATABLOCK, SEEK_SET));
+		assert(!fseek(fd, frames[vitima].id * DATABLOCK, SEEK_SET));
 		printf("writing on %zd\n", ftell(fd));
 		if (fwrite(frames[vitima].datablock, 1, DATABLOCK, fd) < DATABLOCK)
 			printf("Erro salvando datablock %d\n", frames[vitima].id), perror("qq deu?"), exit(1);
@@ -94,7 +93,7 @@ Buffer *get_datablock(int id) {
 	fd = fopen(DATAFILE, "r+");
 	assert(fd);
 	// Lê o buffer do arquivo
-	assert(!fseek(fd, CONTROLSIZE + id * DATABLOCK, SEEK_SET));
+	assert(!fseek(fd, id * DATABLOCK, SEEK_SET));
 	if(fread(frames[vitima].datablock, 1, DATABLOCK, fd) < DATABLOCK)
 		printf("Erro lendo datablock %d\n", id), perror("qq deu?"), exit(1);
 
@@ -135,7 +134,7 @@ void persist() {
 		if (frames[i].dirty) {
 			fd = fopen(DATAFILE, "r+");
 			assert(fd);
-			fseek(fd, CONTROLSIZE + frames[i].id * DATABLOCK, SEEK_SET);
+			fseek(fd, frames[i].id * DATABLOCK, SEEK_SET);
 			printf("writing on %zd\n", ftell(fd));
 
 			if (fwrite(frames[i].datablock, DATABLOCK, 1, fd) != 1)
@@ -165,18 +164,19 @@ void create_database() {
 	// Escrevendo configuração
 	bzero(&conf, sizeof(Config));
 	// FIXME: Utilizar desse jeito mesmo, acho que é melhor não usar default...
-	conf.root = 0;
-	conf.table = 1;
+	//conf.root = 0;
+	//conf.table = 1;
 	conf.nextpk = 1;
 
-	// Seta como usado os buffers iniciais da BTREE e da TABELA
+	// Seta como usado os buffers iniciais utilizados para a configuração
 	SET_USED(conf.bitmap, 0);
 	SET_USED(conf.bitmap, 1);
+	SET_USED(conf.bitmap, 2);
 	// Seta como usado os 3 últimos buffers , ja que o buffer inicia em zero
 	//e tem um offset de 3 datablocks (CONTROLSIZE).
-	SET_USED(conf.bitmap, 2 * DATABLOCK - 1);
-	SET_USED(conf.bitmap, 2 * DATABLOCK - 2);
-	SET_USED(conf.bitmap, 2 * DATABLOCK - 3);
+	//SET_USED(conf.bitmap, 2 * DATABLOCK - 1);
+	//SET_USED(conf.bitmap, 2 * DATABLOCK - 2);
+	//SET_USED(conf.bitmap, 2 * DATABLOCK - 3);
 	fwrite(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
 
@@ -217,6 +217,13 @@ Buffer *get_insertable_datablock(int len) {
 		return NULL;
 	}
 
+	if (!conf.table) {
+		id = g_list_first(free_blocks);
+		conf.table = (int) id->data;
+		free_blocks = g_list_delete_link(free_blocks, id);
+		SET_USED(conf.bitmap, conf.table);
+	}
+
 	b = get_datablock(conf.table);
 	dbh = DBH(b->datablock);
 	if (!dbh->free)
@@ -244,6 +251,46 @@ Buffer *get_insertable_datablock(int len) {
 	}
 
 	return b;
+}
+
+typedef struct {
+	short row;
+	short id;
+} RowId;
+
+typedef struct {
+	short len;
+	short prev;
+	short next;
+} BTHeader;
+
+typedef struct {
+	short prev;
+	int pk;
+	short next;
+} BTBNode;
+
+typedef struct {
+	int pk;
+	RowId rowid;
+} BTLNode;
+
+// TODO: Acaba de calcular isso!
+#define BRANCH_D (DATABLOCK - sizeof(BTHeader)) / sizeof(BTLNode)
+void btree_insert(int pk, short row, short id) {
+	Buffer *b;
+	GList *l;
+
+	printf("inserindo %d @ %d:%d\n", pk, id, row);
+	if (!conf.root) {
+		l = g_list_first(free_blocks);
+		conf.root = (int) l->data;
+		free_blocks = g_list_delete_link(free_blocks, l);
+		SET_USED(conf.bitmap, conf.root);
+	}
+
+	//b = get_datablock(conf.root);
+
 }
 
 void insert_cmd(char *params) {
@@ -277,7 +324,8 @@ void insert_cmd(char *params) {
 	memcpy(&b->datablock[eh->init], params, len);
 	assert(f == dbh->free);
 	b->dirty = 1;
-	// btree_insert(eh->pk, i - 1, b->id))
+
+	btree_insert(eh->pk, dbh->header_len - 1, b->id);
 }
 
 void select_cmd(char *params) {
@@ -370,6 +418,8 @@ void help() {
 			"\t- search <tag>\n"
 			"\t- select <pk>\n"
 			"\t- delete <pk>\n"
+			"\t- load <file>\n"
+			"\t- persist\n"
 			"\t- help\n");
 }
 
