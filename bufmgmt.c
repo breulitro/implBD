@@ -413,11 +413,14 @@ int main() {
 	} while (1);
 
 	clear_history();
+
 	persist();
 
 	for (int i = 0; i < framesLen; i++) {
 		free(frames[i].datablock);
 	}
+
+	g_list_free(free_blocks);
 
 	printf("hit = %d, miss = %d\n", hit, miss);
 
