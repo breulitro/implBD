@@ -314,7 +314,7 @@ void btree_insert(int pk, short row, short id) {
 
 	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
-
+#if 0
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
 		conf.root = (int) l->data;
@@ -374,7 +374,7 @@ void btree_insert(int pk, short row, short id) {
 			printf("TBD: Branch insert\n");
 		}
 	}
-
+#endif
 }
 
 void insert_cmd(char *params) {
@@ -570,6 +570,8 @@ void load_cmd(char *params) {
 			insert_cmd(line);
 		}
 	}
+
+	fclose(fp);
 }
 
 void help() {
