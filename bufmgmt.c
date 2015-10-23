@@ -452,6 +452,11 @@ void search_cmd(char *params) {
 		printf("header_len(%d)\n", dbh->header_len);
 		for (i = 1; i <= dbh->header_len; i++) {
 			eh = EH(dbh, i);
+
+			//Caso o documento tenha sido deletado, ignora a EntryHeader
+			if (!eh->pk)
+				continue;
+
 			if (strnstr(&b->datablock[eh->init], params, eh->offset)) {
 				te = malloc(sizeof(TableEntry));
 				te->json = malloc(eh->offset + 1);
