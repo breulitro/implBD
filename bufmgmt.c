@@ -389,8 +389,28 @@ void insert_cmd(char *params) {
 	btree_insert(eh->pk, dbh->header_len - 1, b->id);
 }
 
+// WARN: Não é feita verificação se existe realmente o RowId em questão
 void select_cmd(char *params) {
-	printf("TBD\n");
+	char *brow, *bid;
+	short row, id;
+	Buffer *b;
+	char *buf;
+	DBHeader *dbh;
+	EntryHeader *eh;
+
+	bid = strtok_r(params, ":", &brow);
+	id = atoi(bid);
+	row = atoi(brow);
+
+	b = get_datablock(id);
+	dbh = DBH(b->datablock);
+	eh = EH(dbh, row + 1);// Row começa em 1
+	buf = malloc(eh->offset + 1);
+	memcpy(buf, &b->datablock[eh->init], eh->offset);
+	buf[eh->offset] = 0;
+
+	printf("%d | %s\n", eh->pk, buf);
+	free(buf);
 }
 
 typedef struct {
@@ -447,8 +467,22 @@ void search_cmd(char *params) {
 	g_list_free_full(l, free_table_entry);
 }
 
-void delete_cmd(char *params) {
+void delete(char *datablock, short row) {
 	printf("TBD\n");
+}
+
+void delete_cmd(char *params) {
+	char *brow, *bid;
+	short row, id;
+	Buffer *b;
+
+	brow = strtok_r(params, ":", &bid);
+	row = atoi(brow);
+	id = atoi(bid);
+
+	printf("Row %d, id %d\n", row, id);
+	b = get_datablock(id);
+	delete(b->datablock, row);
 }
 
 void load_cmd(char *params) {
