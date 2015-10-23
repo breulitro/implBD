@@ -172,11 +172,7 @@ void create_database() {
 	SET_USED(conf.bitmap, 0);
 	SET_USED(conf.bitmap, 1);
 	SET_USED(conf.bitmap, 2);
-	// Seta como usado os 3 últimos buffers , ja que o buffer inicia em zero
-	//e tem um offset de 3 datablocks (CONTROLSIZE).
-	//SET_USED(conf.bitmap, 2 * DATABLOCK - 1);
-	//SET_USED(conf.bitmap, 2 * DATABLOCK - 2);
-	//SET_USED(conf.bitmap, 2 * DATABLOCK - 3);
+
 	fwrite(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
 
@@ -258,14 +254,21 @@ typedef struct {
 	short id;
 } RowId;
 
+typedef enum {
+	LEAF,
+	BRANCH
+} BTType;
+
 typedef struct {
 	short len;
 	short prev;
 	short next;
+	BTType type;
 } BTHeader;
 
 // Tem que setar o tipo de atributo pra __packed__ senão ele bota padding no
-// prev e next, ai a estrutura fica com 12 bytes... não é isso que a gente quer!
+// prev e no next pra estrutura ficar uniforme. Isso deixa a estrutura com 12 bytes.
+// E não é isso que a gente quer, queremos ela com seus 8 bytes enxutos!
 typedef struct {
 	short prev;
 	int pk;
@@ -281,9 +284,15 @@ typedef struct {
 #define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(short))) / 2)
 #define LEAF_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTLNode)) / sizeof(BTLNode)) / 2)
 
+#define BR(block, i) (BTBNode *) (i ? (block + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : block + sizeof(BTHeader))
+#define LF(block, i) (BTLNode *) (block + sizeof(BTHeader) + i * sizeof(BTLNode))
 void btree_insert(int pk, short row, short id) {
 	Buffer *b;
 	GList *l;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+	int i;
 
 	printf("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
@@ -295,6 +304,53 @@ void btree_insert(int pk, short row, short id) {
 	}
 
 	b = get_datablock(conf.root);
+	bth = (BTHeader *) b->datablock;
+	if (!bth->len)
+		bth->type = LEAF;
+
+	for (i = 0; i < bth->len; i++) {
+		if (bth->type == LEAF) {
+			lf = LF(bth, i);
+			if (lf->pk < pk)
+				continue;
+			// Se cair aqui é pq estamos inserindo no meio
+			if (bth->len) {
+				// Se não for o primeiro elemento, temos que abrir espaço
+				memmove(lf + sizeof(BTLNode), lf, (bth->len - i) * sizeof(BTLNode));
+			}
+
+			lf->pk = pk;
+			lf->rowid.row = row;
+			lf->rowid.id = id;
+			bth->len++;
+			printf("meio - inserindo leafnode%d\n", bth->len);
+			if (bth->len > LEAF_D * 2)
+				// Leaf Split
+				printf("TBD: Leaf Split\n");
+			break;
+		} else {
+			br = BR(bth, i);
+			printf("TBD: Branch insert\n");
+		}
+	}
+
+	if (i == bth->len) {
+		//Se cair aqui é pq estamos inserindo no final
+		if (bth->type == LEAF) {
+			lf = LF(bth, i);
+			lf->pk = pk;
+			lf->rowid.row = row;
+			lf->rowid.id = id;
+			bth->len++;
+			printf("inicio - inserindo leafnode%d\n", bth->len);
+			if (bth->len > LEAF_D * 2)
+				// Leaf Split
+				printf("TBD: Leaf Split\n");
+		} else {
+			br = BR(bth, i);
+			printf("TBD: Branch insert\n");
+		}
+	}
 
 }
 
@@ -318,12 +374,12 @@ void insert_cmd(char *params) {
 	eh->offset = len;
 	eh->pk = conf.nextpk++;
 	dbh->next_init += eh->offset;
-	printf("free(%ld), offset(%ld), header(%ld) | free - offset - header = %ld\n",
+	printf("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
 			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
 	//dbh->free -= eh->offset - sizeof(EntryHeader);
 	dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
 	f = dbh->free;
-	printf("free(%ld)\n", dbh->free);
+	printf("free(%d)\n", dbh->free);
 	assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
 	//*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], params, len);
 	memcpy(&b->datablock[eh->init], params, len);
