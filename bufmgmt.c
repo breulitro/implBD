@@ -17,6 +17,12 @@
 #define DBH(buf) ((DBHeader *) (((char *)&(buf)[DATABLOCK - 1]) - sizeof(DBHeader)));
 #define EH(dbh, n) ((EntryHeader *) ((char *)(dbh) - sizeof(EntryHeader) * (n)))
 
+#ifdef DEBUG
+#define DBG(fmt, ...) printf("%s() @ %s +%d: "fmt, __func__, __FILE__, __LINE__, ##__VA_ARGS__)
+#else
+#define DBG(fmt, ...)
+#endif
+
 typedef struct Buffer {
 	int id;
 	char *datablock;
@@ -35,25 +41,21 @@ Buffer *get_datablock(int id) {
 	int i;
 	FILE *fd;
 
-#ifdef DEBUG
-	printf("%s(%d)\n", __func__, id);
-#endif
+	DBG("%s(%d)\n", __func__, id);
 	// Caso esteja nos frames (cache hit)
 	for (i = 0; i < framesLen; i++) {
 		if (frames[i].id == id) {
 			frames[i].used = 1;
 			hit++;
-#ifdef DEBUG
-			printf("Cache hit!\n");
-#endif
+
+			DBG("Cache hit!\n");
+
 			return &frames[i];
 		}
 	}
 	// Cache miss
 	miss++;
-#ifdef DEBUG
-	printf("Cache miss\n");
-#endif
+	DBG("Cache miss\n");
 
 	// Caso NÃO esteja nos frames e o framebuffer ainda não estiver cheio
 	if (framesLen < 256) {
@@ -70,9 +72,7 @@ Buffer *get_datablock(int id) {
 		if (fseek(fd, id * DATABLOCK, SEEK_SET) < 0)
 			perror("fseek");
 
-#ifdef DEBUG
-		printf("Reading @ %ld\n", ftell(fd));
-#endif
+		DBG("Reading @ %ld\n", ftell(fd));
 		if (fread(frames[framesLen].datablock, 1, DATABLOCK, fd) < DATABLOCK) {
 			perror("fudeu"), printf("Erro lendo datablock %d\n", id), exit(1);
 		}
@@ -81,15 +81,12 @@ Buffer *get_datablock(int id) {
 	}
 
 	// Caso framebuffer estiver cheio
-#ifdef DEBUG
-	printf("frames cheio\n");
-#endif
+	DBG("frames cheio\n");
+
 	while (frames[vitima].used)
 		frames[vitima++].used = 0;
 
-#ifdef DEBUG
-	printf("Vitima é o frame %d - id = %d\n", vitima, frames[vitima].id);
-#endif
+	DBG("Vitima é o frame %d - id = %d\n", vitima, frames[vitima].id);
 
 	// Se buffer tiver sido alterado, salva ele (write back policy)
 	if (frames[vitima].dirty) {
@@ -159,7 +156,6 @@ void persist() {
 	}
 }
 
-
 void create_database() {
 	FILE *fd;
 	DBHeader *dbh;
@@ -186,9 +182,7 @@ void create_database() {
 	fwrite(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
 
-#ifdef DEBUG
-	printf("datafile created\n");
-#endif
+	DBG("datafile created\n");
 }
 
 void init_database() {
@@ -205,7 +199,7 @@ void init_database() {
 			free_blocks = g_list_append(free_blocks, (gpointer) i);
 #ifdef DEBUG
 		else
-			printf("Datablock %ld ocupado\n", i);
+			DBG("Datablock %ld ocupado\n", i);
 #endif
 	}
 }
@@ -315,10 +309,9 @@ void btree_insert(int pk, short row, short id) {
 	BTLNode *lf;
 	int i;
 
-#ifdef DEBUG
-	printf("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
-#endif
+	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
+
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
 		conf.root = (int) l->data;
@@ -346,9 +339,9 @@ void btree_insert(int pk, short row, short id) {
 			lf->rowid.row = row;
 			lf->rowid.id = id;
 			bth->len++;
-#ifdef DEBUG
-			printf("meio - inserindo leafnode %d\n", bth->len);
-#endif
+
+			DBG("meio - inserindo leafnode %d\n", bth->len);
+
 			if (bth->len > LEAF_D * 2)
 				// Leaf Split
 				printf("TBD: Leaf Split\n");
@@ -367,9 +360,9 @@ void btree_insert(int pk, short row, short id) {
 			lf->rowid.row = row;
 			lf->rowid.id = id;
 			bth->len++;
-#ifdef DEBUG
-			printf("inicio - inserindo leafnode %d\n", bth->len);
-#endif
+
+			DBG("inicio - inserindo leafnode %d\n", bth->len);
+
 			if (bth->len > LEAF_D * 2)
 				// Leaf Split
 				printf("TBD: Leaf Split\n");
@@ -390,6 +383,11 @@ void insert_cmd(char *params) {
 	EntryHeader *eh;
 
 	len = strlen(params);
+	if (!len) {
+		printf("Documento vazio.\n");
+		return;
+	}
+
 	b = get_insertable_datablock(len);
 	dbh = DBH(b->datablock);
 	dbh->header_len++;
@@ -399,15 +397,15 @@ void insert_cmd(char *params) {
 	eh->offset = len;
 	eh->pk = conf.nextpk++;
 	dbh->next_init += eh->offset;
-#ifdef DEBUG
-	printf("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
+
+	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
 			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
-#endif
+
 	//dbh->free -= eh->offset - sizeof(EntryHeader);
 	dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
-#ifdef DEBUG
-	printf("free(%d)\n", dbh->free);
-#endif
+
+	DBG("free(%d)\n", dbh->free);
+
 	memcpy(&b->datablock[eh->init], params, len);
 	b->dirty = 1;
 
@@ -495,10 +493,10 @@ void search_cmd(char *params) {
 
 	for (x = g_list_first(l); x; x = x->next) {
 		te = x->data;
-		printf("%d - %s\n", te->pk, te->json);
+		printf("%d | %s\n", te->pk, te->json);
 	}
 
-	printf("retreived %d documents\n", g_list_length(l));
+	printf("%d documentos\n", g_list_length(l));
 	g_list_free_full(l, free_table_entry);
 }
 
@@ -550,7 +548,7 @@ void load_cmd(char *params) {
 	while ((linelen = getline(&line, &linecap, fp)) > 0) {
 		if (linelen > 1) {
 			line[linelen - 1] = 0;
-			printf("inserting json: %s\n", line);
+			DBG("inserting json: %s\n", line);
 			insert_cmd(line);
 		}
 	}
@@ -593,6 +591,40 @@ void parse_cmds(char *full_cmd) {
 		printf("cmd unknown.\n");
 }
 
+char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help"};
+
+char* cmd_generator(const char *text, int state) {
+	static int list_index, len;
+	char *name;
+
+	if (!state) {
+		list_index = 0;
+		len = strlen (text);
+	}
+
+	while ((name = cmd[list_index])) {
+		list_index++;
+
+		if (strncmp (name, text, len) == 0)
+			return (strdup(name));
+	}
+
+	return ((char *)NULL);
+
+}
+
+static char **cmd_completion(const char *text, int start, int end) {
+	char **matches;
+
+	matches = (char **)NULL;
+
+	if (start == 0)
+		matches = rl_completion_matches ((char*)text, &cmd_generator);
+
+	return (matches);
+
+}
+
 int main() {
 	char *cmd, *hist;
 	char prompt[] = "sgbd> ";
@@ -604,17 +636,19 @@ int main() {
 	if ((fd = fopen(DATAFILE, "r")) != 0)
 		fclose(fd);
 	else {
-		printf("First run\n");
+		DBG("First run\n");
 		create_database();
 	}
 
 	// Inicializa as estruturas de controle do programa.
 	init_database();
-#ifdef DEBUG
-	printf("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
-#endif
+	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
+
+	rl_attempted_completion_function = cmd_completion;
 	do {
 		cmd = readline(prompt);
+		rl_bind_key('\t',rl_complete);
+
 		if (!strcmp(cmd, "exit") || !strcmp(cmd, "quit")){
 			break;
 		}
