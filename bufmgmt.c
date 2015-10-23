@@ -12,11 +12,14 @@
 #define CONTROLSIZE DATABLOCK * 3
 #define DATAFILE ".datafile"
 
-#define IS_USED(var, n) (var[n / 8] & (1 << (n % 8)))
-#define SET_USED(var, n) var[(n) / 8] |= (1 << ((n) % 8))
+#define ROOT 0
+#define TABLE 1
 
-#define DBH(buf) ((DBHeader *) (((char *)&buf[DATABLOCK - 1]) - sizeof(DBHeader)));
-#define EH(dbh, n) ((EntryHeader *) ((char *)dbh - sizeof(EntryHeader) * (n)))
+#define IS_USED(bmap, n) (bmap[n / 8] & (1 << (n % 8)))
+#define SET_USED(bmap, n) bmap[(n) / 8] |= (1 << ((n) % 8))
+
+#define DBH(buf) ((DBHeader *) (((char *)&(buf)[DATABLOCK - 1]) - sizeof(DBHeader)));
+#define EH(dbh, n) ((EntryHeader *) ((char *)(dbh) - sizeof(EntryHeader) * (n)))
 
 typedef struct Buffer {
 	int id;
@@ -109,6 +112,7 @@ typedef struct {
 	int header_len;
 	int free;
 	int next_init;
+	int next;
 } DBHeader;
 
 typedef struct {
@@ -160,6 +164,9 @@ void create_database() {
 	conf.table = 1;
 	conf.nextpk = 1;
 
+	// Seta como usado os buffers iniciais da BTREE e da TABELA
+	SET_USED(conf.bitmap, 0);
+	SET_USED(conf.bitmap, 1);
 	// Seta como usado os 3 últimos buffers , ja que o buffer inicia em zero
 	//e tem um offset de 3 datablocks (CONTROLSIZE).
 	SET_USED(conf.bitmap, 2 * DATABLOCK - 1);
@@ -180,7 +187,7 @@ void init_database() {
 	fclose(fd);
 
 	free_blocks = NULL;
-	for (i = 3; i < (FILESIZE / DATABLOCK / 8); i++) {
+	for (i = 0; i < (FILESIZE / DATABLOCK / 8); i++) {
 		if (!IS_USED(conf.bitmap, i))
 			free_blocks = g_list_append(free_blocks, (gpointer) i);
 		else
@@ -196,10 +203,46 @@ typedef struct {
 } EntryHeader;
 
 Buffer *get_insertable_datablock(int len) {
-	Buffer *b = NULL;
+	Buffer *b, *baux;
 	DBHeader *dbh;
 	GList *id;
+/*
+	for (b = get_datablock(TABLE);
+		((DBHeader *)DBH(b->datablock))->free < len + sizeof(DBHeader);
+		b = DBH(b->datablock)->next ?
+			get_datablock(DBH(b->datablock)->next) :
+			id = g_list_first(free_blocks), get_datablock(id) ? get_datablock(id) : return NULL);
+*/
+	if (len > DATABLOCK - sizeof(DBHeader) - sizeof(EntryHeader)) {
+		printf("Arquivos que ocupem mais de um datablock não são suportados ainda.\n");
+		return NULL;
+	}
 
+	b = get_datablock(TABLE);
+	dbh = DBH(b->datablock);
+	if (!dbh->free)
+		dbh->free = DATABLOCK - sizeof(DBHeader);
+
+	while (dbh->free < len + sizeof(DBHeader)) {
+		if (dbh->next)
+			b = get_datablock(dbh->next);
+		else {
+			if ((id = g_list_first(free_blocks)) == NULL) {
+				printf("Não tem mais datablocks livres\n");
+				return NULL;
+			}
+
+			b = get_datablock((int) id->data);
+			dbh->next = (int) id->data;
+			SET_USED(conf.bitmap, (int) id->data);
+			free_blocks = g_list_delete_link(free_blocks, id);
+		}
+
+		dbh = DBH(b->datablock);
+		if (!dbh->free)
+			dbh->free = DATABLOCK - sizeof(DBHeader);
+	}
+#if 0
 	for (id = g_list_first(free_blocks); id; id = id->next) {
 		b = get_datablock((int) id->data);
 		dbh = DBH(b->datablock);
@@ -218,6 +261,7 @@ Buffer *get_insertable_datablock(int len) {
 			break;
 		}
 	}
+#endif
 
 	return b;
 }
@@ -365,6 +409,7 @@ int main() {
 	} while (1);
 
 	clear_history();
+	persist();
 /*
 	for (int i = 0; i < 256; i++) {
 		b = get_datablock(i);
