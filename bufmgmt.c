@@ -12,9 +12,6 @@
 #define CONTROLSIZE DATABLOCK * 3
 #define DATAFILE ".datafile"
 
-#define ROOT 0
-#define TABLE 1
-
 #define IS_USED(bmap, n) (bmap[n / 8] & (1 << (n % 8)))
 #define SET_USED(bmap, n) bmap[(n) / 8] |= (1 << ((n) % 8))
 
@@ -206,19 +203,13 @@ Buffer *get_insertable_datablock(int len) {
 	Buffer *b, *baux;
 	DBHeader *dbh;
 	GList *id;
-/*
-	for (b = get_datablock(TABLE);
-		((DBHeader *)DBH(b->datablock))->free < len + sizeof(DBHeader);
-		b = DBH(b->datablock)->next ?
-			get_datablock(DBH(b->datablock)->next) :
-			id = g_list_first(free_blocks), get_datablock(id) ? get_datablock(id) : return NULL);
-*/
+
 	if (len > DATABLOCK - sizeof(DBHeader) - sizeof(EntryHeader)) {
 		printf("Arquivos que ocupem mais de um datablock não são suportados ainda.\n");
 		return NULL;
 	}
 
-	b = get_datablock(TABLE);
+	b = get_datablock(conf.table);
 	dbh = DBH(b->datablock);
 	if (!dbh->free)
 		dbh->free = DATABLOCK - sizeof(DBHeader);
@@ -242,26 +233,6 @@ Buffer *get_insertable_datablock(int len) {
 		if (!dbh->free)
 			dbh->free = DATABLOCK - sizeof(DBHeader);
 	}
-#if 0
-	for (id = g_list_first(free_blocks); id; id = id->next) {
-		b = get_datablock((int) id->data);
-		dbh = DBH(b->datablock);
-		assert((long)&b->datablock[DATABLOCK - 1] - (long)dbh == 12);
-
-		if (dbh->free == 0) {
-			dbh->free = DATABLOCK - sizeof(DBHeader);
-			assert(dbh->free == 4084);
-		}
-
-		printf("free(%d) < vaiserocupado(%d)\n", dbh->free, len + sizeof(DBHeader)); 
-		//printf("dbh->free(%d) > len(%d) = %d\n", dbh->free, len, dbh->free > len);
-		if (dbh->free < (len + sizeof(DBHeader)))
-			continue;
-		else {
-			break;
-		}
-	}
-#endif
 
 	return b;
 }
@@ -292,8 +263,6 @@ void insert_cmd(char *params) {
 	dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
 	f = dbh->free;
 	printf("free(%ld)\n", dbh->free);
-	//assert(dbh->free == 4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106)
-	//assert(4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106 >= 0);
 	assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
 	*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], params, len);
 	assert(f == dbh->free);
@@ -440,5 +409,7 @@ int main() {
 	printf("root = %d\n", conf.root);
 	fclose(fd);
 */
+	printf("hit = %d, miss = %d\n", hit, miss);
+
 	return 0;
 }
