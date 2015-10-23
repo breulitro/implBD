@@ -53,7 +53,7 @@ Buffer *get_datablock(int id) {
 
 	// Caso NÃO esteja nos frames e o framebuffer ainda não estiver cheio
 	if (framesLen < 256) {
-		fd = fopen(DATAFILE, "r");
+		fd = fopen(DATAFILE, "r+");
 		if (!fd)
 			printf("Erro ao abrir .datafile\n"), exit(1);
 
@@ -65,6 +65,8 @@ Buffer *get_datablock(int id) {
 
 		if (fseek(fd, CONTROLSIZE + id * DATABLOCK, SEEK_SET) < 0)
 			perror("fseek");
+
+		printf("Reading @ %ld\n", ftell(fd));
 		if (fread(frames[framesLen].datablock, 1, DATABLOCK, fd) < DATABLOCK) {
 			perror("fudeu"), printf("Erro lendo datablock %d\n", id), exit(1);
 		}
@@ -89,7 +91,7 @@ Buffer *get_datablock(int id) {
 		fd = NULL;
 	}
 
-	fd = fopen(DATAFILE, "r");
+	fd = fopen(DATAFILE, "r+");
 	assert(fd);
 	// Lê o buffer do arquivo
 	assert(!fseek(fd, CONTROLSIZE + id * DATABLOCK, SEEK_SET));
@@ -133,7 +135,7 @@ void persist() {
 		if (frames[i].dirty) {
 			fd = fopen(DATAFILE, "r+");
 			assert(fd);
-			fseek(fd, CONTROLSIZE + i * DATABLOCK, SEEK_SET);
+			fseek(fd, CONTROLSIZE + frames[i].id * DATABLOCK, SEEK_SET);
 			printf("writing on %zd\n", ftell(fd));
 
 			if (fwrite(frames[i].datablock, DATABLOCK, 1, fd) != 1)
@@ -229,6 +231,7 @@ Buffer *get_insertable_datablock(int len) {
 				return NULL;
 			}
 
+			b->dirty = 1;
 			b = get_datablock((int) id->data);
 			dbh->next = (int) id->data;
 			SET_USED(conf.bitmap, (int) id->data);
@@ -298,6 +301,7 @@ void search_cmd(char *params) {
 	b = get_datablock(conf.table);
 	do {
 		dbh = DBH(b->datablock);
+		printf("header_len(%d)\n", dbh->header_len);
 		for (i = 1; i <= dbh->header_len; i++) {
 			eh = EH(dbh, i);
 			if (strnstr(&b->datablock[eh->init], params, eh->offset)) {
