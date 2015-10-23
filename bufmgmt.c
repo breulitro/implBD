@@ -15,6 +15,9 @@
 #define IS_USED(var, n) (var[n / 8] & (1 << (n % 8)))
 #define SET_USED(var, n) var[(n) / 8] |= (1 << ((n) % 8))
 
+#define DBH(buf) ((DBHeader *) (((char *)&buf[DATABLOCK - 1]) - sizeof(DBHeader)));
+#define EH(dbh, n) ((EntryHeader *) ((char *)dbh - sizeof(EntryHeader) * (n)))
+
 typedef struct Buffer {
 	int id;
 	char *datablock;
@@ -33,7 +36,7 @@ Buffer *get_datablock(int id) {
 	int i;
 	FILE *fd;
 
-	//printf("%s(%d)\n", __func__, id);
+	printf("%s(%d)\n", __func__, id);
 	// Caso esteja nos frames (cache hit)
 	for (i = 0; i < framesLen; i++) {
 		if (frames[i].id == id) {
@@ -46,6 +49,7 @@ Buffer *get_datablock(int id) {
 	}
 	// Cache miss
 	miss++;
+	printf("Cache miss\n");
 
 	// Caso NÃO esteja nos frames e o framebuffer ainda não estiver cheio
 	if (framesLen < 256) {
@@ -67,8 +71,6 @@ Buffer *get_datablock(int id) {
 		fclose(fd);
 		return &frames[framesLen++];
 	}
-
-	printf("Cache miss\n");
 
 	// Caso framebuffer estiver cheio
 	printf("frames cheio\n");
@@ -106,20 +108,14 @@ Buffer *get_datablock(int id) {
 typedef struct {
 	int header_len;
 	int free;
-	int next;
-	int prev;
+	int next_init;
 } DBHeader;
-
-typedef struct {
-	short row;
-	short id;
-	int next;
-} EntryHeader;
 
 typedef struct {
 	unsigned char bitmap[FILESIZE / DATABLOCK / 8];
 	int root;
 	int table;
+	int nextpk;
 } Config;
 
 Config conf;
@@ -162,6 +158,7 @@ void create_database() {
 	// FIXME: Utilizar desse jeito mesmo, acho que é melhor não usar default...
 	conf.root = 0;
 	conf.table = 1;
+	conf.nextpk = 1;
 
 	// Seta como usado os 3 últimos buffers , ja que o buffer inicia em zero
 	//e tem um offset de 3 datablocks (CONTROLSIZE).
@@ -185,17 +182,81 @@ void init_database() {
 	free_blocks = NULL;
 	for (i = 3; i < (FILESIZE / DATABLOCK / 8); i++) {
 		if (!IS_USED(conf.bitmap, i))
-			free_blocks = g_list_append(free_blocks, i);
+			free_blocks = g_list_append(free_blocks, (gpointer) i);
 		else
 			printf("Datablock %ld ocupado\n", i);
 	}
 }
 
-void select_cmd(char *params) {
-	printf("TBD\n");
+typedef struct {
+	int pk;
+	short init;
+	short offset;
+	//int next;
+} EntryHeader;
+
+Buffer *get_insertable_datablock(int len) {
+	Buffer *b = NULL;
+	DBHeader *dbh;
+	GList *id;
+
+	for (id = g_list_first(free_blocks); id; id = id->next) {
+		b = get_datablock((int) id->data);
+		dbh = DBH(b->datablock);
+		assert((long)&b->datablock[DATABLOCK - 1] - (long)dbh == 12);
+
+		if (dbh->free == 0) {
+			dbh->free = DATABLOCK - sizeof(DBHeader);
+			assert(dbh->free == 4084);
+		}
+
+		printf("free(%d) < vaiserocupado(%d)\n", dbh->free, len + sizeof(DBHeader)); 
+		//printf("dbh->free(%d) > len(%d) = %d\n", dbh->free, len, dbh->free > len);
+		if (dbh->free < (len + sizeof(DBHeader)))
+			continue;
+		else {
+			break;
+		}
+	}
+
+	return b;
 }
 
 void insert_cmd(char *params) {
+	// "params" deve conter o json a ser inserido
+	// NÃO É FEITA VALIDAÇÃO DO DOCUMENTO JSON!
+	int i, len;
+	Buffer *b;
+	DBHeader *dbh;
+	EntryHeader *eh;
+	int f;
+
+	len = strlen(params);
+	b = get_insertable_datablock(len);
+	dbh = DBH(b->datablock);
+	dbh->header_len++;
+	eh = (EntryHeader *) dbh - sizeof(EntryHeader) * (dbh->header_len);
+	eh = EH(dbh, dbh->header_len);
+	assert((char *)dbh - (char *)eh == 8 * dbh->header_len);
+	eh->init = dbh->next_init;
+	eh->offset = len;
+	eh->pk = conf.nextpk++;
+	dbh->next_init += eh->offset;
+	printf("free(%ld), offset(%ld), header(%ld) | free - offset - header = %ld\n",
+			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
+	//dbh->free -= eh->offset - sizeof(EntryHeader);
+	dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
+	f = dbh->free;
+	printf("free(%ld)\n", dbh->free);
+	//assert(dbh->free == 4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106)
+	//assert(4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106 >= 0);
+	assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
+	*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], params, len);
+	assert(f == dbh->free);
+	// btree_insert(eh->pk, i - 1, b->id))
+}
+
+void select_cmd(char *params) {
 	printf("TBD\n");
 }
 
@@ -261,7 +322,36 @@ int main() {
 	// Inicializa as estruturas de controle do programa.
 	init_database();
 	printf("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
-
+#if 0
+	EntryHeader *eh;
+	int f;
+	for (int i = 0; i < 100; i++) {
+		b = get_insertable_datablock(106);
+		dbh = DBH(b->datablock);
+		dbh->header_len++;
+		eh = (EntryHeader *) dbh - sizeof(EntryHeader) * (dbh->header_len);
+		eh = EH(dbh, dbh->header_len);
+		assert((char *)dbh - (char *)eh == 8 * dbh->header_len);
+		eh->init = dbh->next_init;
+		eh->offset = 106;
+		//assert(eh->init + eh->offset <= eh - b);
+		eh->pk = conf.nextpk++;
+		dbh->next_init += eh->offset;
+		printf("free(%ld), offset(%ld), header(%ld) | free - offset - header = %ld\n",
+					dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
+		//dbh->free -= eh->offset - sizeof(EntryHeader);
+		dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
+		f = dbh->free;
+		printf("free(%ld)\n", dbh->free);
+		//assert(dbh->free == 4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106)
+		//assert(4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106 >= 0);
+		assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
+		*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], "aksjdfhkjlasdfhlkjashdflkjahsdlfjkhasdlkjfhaskljdfhklasdjfgalshkjfgklajhsdgfkhljasdfghkljasgdhfkjlasdhfkjl", 106);
+		assert(f == dbh->free);
+		printf("inserido %d\n", i);
+	}
+	return 0;
+#endif
 	do {
 		cmd = readline(prompt);
 		if (!strcmp(cmd, "exit") || !strcmp(cmd, "quit")){
