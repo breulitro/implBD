@@ -652,6 +652,11 @@ int main() {
 	DBHeader *dbh;
 	FILE *fd;
 
+	printf("Pontifícia Universidade Católica do Rio Grande do Sul\n"
+			"Implementação de Banco de Dados T(128) - 4641H-04 - 2015/2\n"
+			"Trabalho: Mini Simulador de Sistema de Gestao de Metadados\n"
+			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n"
+			"Professor: Eduardo Henrique Pereira de Arruda\n\n");
 	// Testa para ver se já existe DATAFILE
 	if ((fd = fopen(DATAFILE, "r")) != 0)
 		fclose(fd);
