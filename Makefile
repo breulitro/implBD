@@ -1,9 +1,10 @@
 all:
-	gcc bufmgmt.c -g `pkg-config --cflags --libs glib-2.0` -lreadline -lncurses -o sgbd
+	gcc bufmgmt.c -g `pkg-config --cflags --libs glib-2.0` -lreadline -o sgbd
 	rm -f .datafile
+
 debug:
-	gcc bufmgmt.c -g `pkg-config --cflags --libs glib-2.0` -lreadline -lncurses -o sgbd -DDEBUG
+	gcc bufmgmt.c -g `pkg-config --cflags --libs glib-2.0` -lreadline -o sgbd -DDEBUG
 	rm -f .datafile
-stuff:
-	gcc `pkg-config --cflags --libs glib-2.0` create_datafile.c
-	rm .datafile
+
+clean:
+	rm -f sgbd .datafile
