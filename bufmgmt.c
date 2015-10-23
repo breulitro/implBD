@@ -343,7 +343,25 @@ void delete_cmd(char *params) {
 }
 
 void load_cmd(char *params) {
-	printf("TBD\n");
+	FILE *fp;
+	char *line = NULL;
+	size_t linecap = 0;
+	ssize_t linelen;
+
+	printf("Oppening %s\n", params);
+	fp = fopen(params, "r+");
+	if (!fp) {
+		perror("Oppening file");
+		return;
+	}
+
+	while ((linelen = getline(&line, &linecap, fp)) > 0) {
+		if (linelen > 1) {
+			line[linelen - 1] = 0;
+			printf("inserting json: %s\n", line);
+			insert_cmd(line);
+		}
+	}
 }
 
 void help() {
