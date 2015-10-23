@@ -186,7 +186,9 @@ void create_database() {
 	fwrite(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
 
+#ifdef DEBUG
 	printf("datafile created\n");
+#endif
 }
 
 void init_database() {
@@ -201,8 +203,10 @@ void init_database() {
 	for (i = 0; i < (FILESIZE / DATABLOCK / 8); i++) {
 		if (!IS_USED(conf.bitmap, i))
 			free_blocks = g_list_append(free_blocks, (gpointer) i);
+#ifdef DEBUG
 		else
 			printf("Datablock %ld ocupado\n", i);
+#endif
 	}
 }
 
