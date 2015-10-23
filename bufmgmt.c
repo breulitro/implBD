@@ -415,6 +415,10 @@ int main() {
 	clear_history();
 	persist();
 
+	for (int i = 0; i < framesLen; i++) {
+		free(frames[i].datablock);
+	}
+
 	printf("hit = %d, miss = %d\n", hit, miss);
 
 	return 0;
