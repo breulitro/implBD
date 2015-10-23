@@ -24,8 +24,6 @@
 #define DBG(fmt, ...)
 #endif
 
-char *trim(char *);
-
 typedef struct Buffer {
 	int id;
 	char *datablock;
@@ -161,8 +159,6 @@ void persist() {
 
 void create_database() {
 	FILE *fd;
-	DBHeader *dbh;
-	char buf[DATABLOCK];
 
 	fd = fopen(DATAFILE, "w");
 	if (ftruncate(fileno(fd), FILESIZE) < 0)
@@ -216,7 +212,7 @@ typedef struct {
 } EntryHeader;
 
 Buffer *get_insertable_datablock(int len) {
-	Buffer *b, *baux;
+	Buffer *b;
 	DBHeader *dbh;
 	GList *id;
 
@@ -305,12 +301,15 @@ typedef struct {
 #define LF(block, i) (BTLNode *) (block + sizeof(BTHeader) + i * sizeof(BTLNode))
 
 void btree_insert(int pk, short row, short id) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 	Buffer *b;
 	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
 	int i;
+#pragma GCC diagnostic pop
 
 	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
@@ -380,7 +379,7 @@ void btree_insert(int pk, short row, short id) {
 void insert_cmd(char *params) {
 	// "params" deve conter o json a ser inserido
 	// NÃO É FEITA VALIDAÇÃO DO DOCUMENTO JSON!
-	int i, len;
+	int len;
 	Buffer *b;
 	DBHeader *dbh;
 	EntryHeader *eh;
@@ -474,7 +473,6 @@ void search_cmd(char *params) {
 	TableEntry *te;
 	GList *x, *l = NULL;
 	short i;
-	char buf[DATABLOCK];
 
 	b = get_datablock(conf.table);
 	do {
@@ -669,8 +667,6 @@ char *trim(char *str) {
 int main() {
 	char *cmd, *hist, *aux;
 	char prompt[] = "sgbd> ";
-	Buffer *b;
-	DBHeader *dbh;
 	FILE *fd;
 
 	printf("Pontifícia Universidade Católica do Rio Grande do Sul\n"
