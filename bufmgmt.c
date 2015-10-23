@@ -6,6 +6,7 @@
 #include <glib.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <ctype.h>
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
@@ -591,7 +592,7 @@ void parse_cmds(char *full_cmd) {
 		printf("cmd unknown.\n");
 }
 
-char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help"};
+char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit"};
 
 char* cmd_generator(const char *text, int state) {
 	static int list_index, len;
@@ -625,8 +626,27 @@ static char **cmd_completion(const char *text, int start, int end) {
 
 }
 
+char *trim(char *str) {
+	char *end;
+
+	// Trim leading space
+	while(isspace(*str)) str++;
+
+	if(*str == 0)  // All spaces?
+		return str;
+
+	// Trim trailing space
+	end = str + strlen(str) - 1;
+	while(end > str && isspace(*end)) end--;
+
+	// Write new null terminator
+	*(end + 1) = 0;
+
+	return str;
+}
+
 int main() {
-	char *cmd, *hist;
+	char *cmd, *hist, *aux;
 	char prompt[] = "sgbd> ";
 	Buffer *b;
 	DBHeader *dbh;
@@ -649,9 +669,13 @@ int main() {
 		cmd = readline(prompt);
 		rl_bind_key('\t',rl_complete);
 
-		if (!strcmp(cmd, "exit") || !strcmp(cmd, "quit")){
+		aux = cmd;
+		aux = trim(aux);
+
+		if (!strcmp(aux, "exit") || !strcmp(aux, "quit")){
 			break;
 		}
+
 		hist = strdup(cmd);
 		parse_cmds(cmd);
 		free(cmd);
