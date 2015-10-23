@@ -35,20 +35,25 @@ Buffer *get_datablock(int id) {
 	int i;
 	FILE *fd;
 
+#ifdef DEBUG
 	printf("%s(%d)\n", __func__, id);
+#endif
 	// Caso esteja nos frames (cache hit)
 	for (i = 0; i < framesLen; i++) {
 		if (frames[i].id == id) {
 			frames[i].used = 1;
 			hit++;
-
+#ifdef DEBUG
 			printf("Cache hit!\n");
+#endif
 			return &frames[i];
 		}
 	}
 	// Cache miss
 	miss++;
+#ifdef DEBUG
 	printf("Cache miss\n");
+#endif
 
 	// Caso NÃO esteja nos frames e o framebuffer ainda não estiver cheio
 	if (framesLen < 256) {
@@ -65,7 +70,9 @@ Buffer *get_datablock(int id) {
 		if (fseek(fd, id * DATABLOCK, SEEK_SET) < 0)
 			perror("fseek");
 
+#ifdef DEBUG
 		printf("Reading @ %ld\n", ftell(fd));
+#endif
 		if (fread(frames[framesLen].datablock, 1, DATABLOCK, fd) < DATABLOCK) {
 			perror("fudeu"), printf("Erro lendo datablock %d\n", id), exit(1);
 		}
@@ -74,20 +81,26 @@ Buffer *get_datablock(int id) {
 	}
 
 	// Caso framebuffer estiver cheio
+#ifdef DEBUG
 	printf("frames cheio\n");
+#endif
 	while (frames[vitima].used)
 		frames[vitima++].used = 0;
 
+#ifdef DEBUG
 	printf("Vitima é o frame %d - id = %d\n", vitima, frames[vitima].id);
+#endif
+
 	// Se buffer tiver sido alterado, salva ele (write back policy)
 	if (frames[vitima].dirty) {
 		fd = fopen(DATAFILE, "r+");
 		assert(!fseek(fd, frames[vitima].id * DATABLOCK, SEEK_SET));
-		printf("writing on %zd\n", ftell(fd));
+		//printf("writing on %zd\n", ftell(fd));
+
 		if (fwrite(frames[vitima].datablock, 1, DATABLOCK, fd) < DATABLOCK)
 			printf("Erro salvando datablock %d\n", frames[vitima].id), perror("qq deu?"), exit(1);
 		fclose(fd);
-		fd = NULL;
+		//fd = NULL;
 	}
 
 	fd = fopen(DATAFILE, "r+");
@@ -135,7 +148,7 @@ void persist() {
 			fd = fopen(DATAFILE, "r+");
 			assert(fd);
 			fseek(fd, frames[i].id * DATABLOCK, SEEK_SET);
-			printf("writing on %zd\n", ftell(fd));
+			//printf("writing on %zd\n", ftell(fd));
 
 			if (fwrite(frames[i].datablock, DATABLOCK, 1, fd) != 1)
 				printf("Erro salvando datablock %d\n", frames[i].id), exit(1);
@@ -163,9 +176,6 @@ void create_database() {
 
 	// Escrevendo configuração
 	bzero(&conf, sizeof(Config));
-	// FIXME: Utilizar desse jeito mesmo, acho que é melhor não usar default...
-	//conf.root = 0;
-	//conf.table = 1;
 	conf.nextpk = 1;
 
 	// Seta como usado os buffers iniciais utilizados para a configuração
@@ -200,6 +210,7 @@ typedef struct {
 	int pk;
 	short init;
 	short offset;
+	// Caso seja necessário suportar arquivos que ocupem mais de um datablock
 	//int next;
 } EntryHeader;
 
@@ -300,7 +311,9 @@ void btree_insert(int pk, short row, short id) {
 	BTLNode *lf;
 	int i;
 
+#ifdef DEBUG
 	printf("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
+#endif
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
@@ -329,7 +342,9 @@ void btree_insert(int pk, short row, short id) {
 			lf->rowid.row = row;
 			lf->rowid.id = id;
 			bth->len++;
-			printf("meio - inserindo leafnode%d\n", bth->len);
+#ifdef DEBUG
+			printf("meio - inserindo leafnode %d\n", bth->len);
+#endif
 			if (bth->len > LEAF_D * 2)
 				// Leaf Split
 				printf("TBD: Leaf Split\n");
@@ -348,7 +363,9 @@ void btree_insert(int pk, short row, short id) {
 			lf->rowid.row = row;
 			lf->rowid.id = id;
 			bth->len++;
-			printf("inicio - inserindo leafnode%d\n", bth->len);
+#ifdef DEBUG
+			printf("inicio - inserindo leafnode %d\n", bth->len);
+#endif
 			if (bth->len > LEAF_D * 2)
 				// Leaf Split
 				printf("TBD: Leaf Split\n");
@@ -367,7 +384,6 @@ void insert_cmd(char *params) {
 	Buffer *b;
 	DBHeader *dbh;
 	EntryHeader *eh;
-	int f;
 
 	len = strlen(params);
 	b = get_insertable_datablock(len);
@@ -375,21 +391,20 @@ void insert_cmd(char *params) {
 	dbh->header_len++;
 	eh = (EntryHeader *) dbh - sizeof(EntryHeader) * (dbh->header_len);
 	eh = EH(dbh, dbh->header_len);
-	assert((char *)dbh - (char *)eh == 8 * dbh->header_len);
 	eh->init = dbh->next_init;
 	eh->offset = len;
 	eh->pk = conf.nextpk++;
 	dbh->next_init += eh->offset;
+#ifdef DEBUG
 	printf("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
 			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
+#endif
 	//dbh->free -= eh->offset - sizeof(EntryHeader);
 	dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
-	f = dbh->free;
+#ifdef DEBUG
 	printf("free(%d)\n", dbh->free);
-	assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
-	//*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], params, len);
+#endif
 	memcpy(&b->datablock[eh->init], params, len);
-	assert(f == dbh->free);
 	b->dirty = 1;
 
 	btree_insert(eh->pk, dbh->header_len - 1, b->id);
@@ -449,7 +464,6 @@ void search_cmd(char *params) {
 	b = get_datablock(conf.table);
 	do {
 		dbh = DBH(b->datablock);
-		printf("header_len(%d)\n", dbh->header_len);
 		for (i = 1; i <= dbh->header_len; i++) {
 			eh = EH(dbh, i);
 
@@ -474,13 +488,13 @@ void search_cmd(char *params) {
 
 	} while(b);
 
-	printf("len = %d\n", g_list_length(l));
 
 	for (x = g_list_first(l); x; x = x->next) {
 		te = x->data;
 		printf("%d - %s\n", te->pk, te->json);
 	}
 
+	printf("retreived %d documents\n", g_list_length(l));
 	g_list_free_full(l, free_table_entry);
 }
 
@@ -592,8 +606,9 @@ int main() {
 
 	// Inicializa as estruturas de controle do programa.
 	init_database();
+#ifdef DEBUG
 	printf("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
-
+#endif
 	do {
 		cmd = readline(prompt);
 		if (!strcmp(cmd, "exit") || !strcmp(cmd, "quit")){
