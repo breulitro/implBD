@@ -124,19 +124,25 @@ Config conf;
 void persist() {
 	int i;
 	FILE *fd = fopen(DATAFILE, "r+");
+	assert(fd);
 
 	fwrite (&conf, sizeof(Config), 1, fd);
+	fclose(fd);
 
 	for (i = 0; i < framesLen; i++) {
 		if (frames[i].dirty) {
+			fd = fopen(DATAFILE, "r+");
+			assert(fd);
 			fseek(fd, CONTROLSIZE + i * DATABLOCK, SEEK_SET);
-//			printf("writing on %zd\n", ftell(fd));
-			if (fwrite(frames[i].datablock, 1, DATABLOCK, fd) < DATABLOCK)
-				printf("Erro salvando datablock %d\n", frames[i].id), exit(1);
-		}
-	}
+			printf("writing on %zd\n", ftell(fd));
 
-	fclose(fd);
+			if (fwrite(frames[i].datablock, DATABLOCK, 1, fd) != 1)
+				printf("Erro salvando datablock %d\n", frames[i].id), exit(1);
+
+			fclose(fd);
+		}
+
+	}
 }
 
 
@@ -264,8 +270,10 @@ void insert_cmd(char *params) {
 	f = dbh->free;
 	printf("free(%ld)\n", dbh->free);
 	assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
-	*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], params, len);
+	//*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], params, len);
+	memcpy(&b->datablock[eh->init], params, len);
 	assert(f == dbh->free);
+	b->dirty = 1;
 	// btree_insert(eh->pk, i - 1, b->id))
 }
 
@@ -273,8 +281,48 @@ void select_cmd(char *params) {
 	printf("TBD\n");
 }
 
+typedef struct {
+	int pk;
+	char *json;
+} TableEntry;
+
 void search_cmd(char *params) {
-	printf("TBD\n");
+	Buffer *b;
+	DBHeader *dbh;
+	EntryHeader *eh;
+	TableEntry *te;
+	GList *x, *l = NULL;
+	short i;
+	char buf[DATABLOCK];
+
+	b = get_datablock(conf.table);
+	do {
+		dbh = DBH(b->datablock);
+		for (i = 1; i <= dbh->header_len; i++) {
+			eh = EH(dbh, i);
+			if (strnstr(&b->datablock[eh->init], params, eh->offset)) {
+				te = malloc(sizeof(TableEntry));
+				te->json = malloc(eh->offset + 1);
+				te->json = memcpy(te->json, &b->datablock[eh->init], eh->offset);
+				te->json[eh->offset] = 0;
+				te->pk = eh->pk;
+				l = g_list_append(l, te);
+			}
+		}
+
+		if (dbh->next)
+			b = get_datablock(dbh->next);
+		else
+			b = NULL;
+
+	} while(b);
+
+	printf("len = %d\n", g_list_length(l));
+
+	for (x = g_list_first(l); x; x = x->next) {
+		te = x->data;
+		printf("%d - %s\n", te->pk, te->json);
+	}
 }
 
 void delete_cmd(char *params) {
@@ -311,7 +359,10 @@ void parse_cmds(char *full_cmd) {
 		delete_cmd(param);
 	else if (!(strcmp(cmd, "load")))
 		load_cmd(param);
-	else if (!(strcmp(cmd, "help")))
+	else if (!(strcmp(cmd, "persist"))) {
+		persist();
+		framesLen = 0;
+	} else if (!(strcmp(cmd, "help")))
 		help();
 	else
 		printf("cmd unknown.\n");
@@ -335,36 +386,7 @@ int main() {
 	// Inicializa as estruturas de controle do programa.
 	init_database();
 	printf("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
-#if 0
-	EntryHeader *eh;
-	int f;
-	for (int i = 0; i < 100; i++) {
-		b = get_insertable_datablock(106);
-		dbh = DBH(b->datablock);
-		dbh->header_len++;
-		eh = (EntryHeader *) dbh - sizeof(EntryHeader) * (dbh->header_len);
-		eh = EH(dbh, dbh->header_len);
-		assert((char *)dbh - (char *)eh == 8 * dbh->header_len);
-		eh->init = dbh->next_init;
-		eh->offset = 106;
-		//assert(eh->init + eh->offset <= eh - b);
-		eh->pk = conf.nextpk++;
-		dbh->next_init += eh->offset;
-		printf("free(%ld), offset(%ld), header(%ld) | free - offset - header = %ld\n",
-					dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
-		//dbh->free -= eh->offset - sizeof(EntryHeader);
-		dbh->free = dbh->free - eh->offset - sizeof(EntryHeader);
-		f = dbh->free;
-		printf("free(%ld)\n", dbh->free);
-		//assert(dbh->free == 4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106)
-		//assert(4096 - sizeof(DBHeader) - eh->pk * sizeof(EntryHeader) - eh->pk * 106 >= 0);
-		assert(&b->datablock[eh->init] - b->datablock < DATABLOCK);
-		*(((char*)&b->datablock[eh->init])) = memcpy((char*)&b->datablock[eh->init], "aksjdfhkjlasdfhlkjashdflkjahsdlfjkhasdlkjfhaskljdfhklasdjfgalshkjfgklajhsdgfkhljasdfghkljasgdhfkjlasdhfkjl", 106);
-		assert(f == dbh->free);
-		printf("inserido %d\n", i);
-	}
-	return 0;
-#endif
+
 	do {
 		cmd = readline(prompt);
 		if (!strcmp(cmd, "exit") || !strcmp(cmd, "quit")){
@@ -379,36 +401,7 @@ int main() {
 
 	clear_history();
 	persist();
-/*
-	for (int i = 0; i < 256; i++) {
-		b = get_datablock(i);
-		sprintf(b->datablock, "{Object:%d, services: [svc1, svc2]}", i);
-		//TODO: inserir no datablock
-	//	insert(b->datablock, "foostringjson");
-		b->dirty = 1;
-	}
 
-	printf("framesLen = %d\n", framesLen);
-	b = get_datablock(12);
-	b = get_datablock(55);
-	printf("[select] %s\n", b->datablock);
-	dbh = &b->datablock[DATABLOCK - 1] - sizeof(DBHeader);
-	printf("header_len = %d\n", dbh->header_len);
-	printf("hit = %d, miss = %d\n", hit, miss);
-
-	SET_USED(conf.bitmap, 666);
-	persist();
-
-	b = get_datablock(999);
-	dbh = &b->datablock[DATABLOCK - 1] - sizeof(DBHeader);
-	printf("header_len = %d\n", dbh->header_len);
-	b = get_datablock(0);
-	printf("[select] %s\n", b->datablock);
-	fd = fopen(DATAFILE, "r");
-	fread(&conf, sizeof(Config), 1, fd);
-	printf("root = %d\n", conf.root);
-	fclose(fd);
-*/
 	printf("hit = %d, miss = %d\n", hit, miss);
 
 	return 0;
