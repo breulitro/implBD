@@ -264,23 +264,28 @@ typedef struct {
 	short next;
 } BTHeader;
 
+// Tem que setar o tipo de atributo pra __packed__ senão ele bota padding no
+// prev e next, ai a estrutura fica com 12 bytes... não é isso que a gente quer!
 typedef struct {
 	short prev;
 	int pk;
 	short next;
-} BTBNode;
+} __attribute__((__packed__)) BTBNode;
 
 typedef struct {
 	int pk;
 	RowId rowid;
 } BTLNode;
 
-// TODO: Acaba de calcular isso!
-#define BRANCH_D (DATABLOCK - sizeof(BTHeader)) / sizeof(BTLNode)
+// Desconta o Header da BTree + 1 Nodo para permitir a inserção do 2d+1-ésimo elemento
+#define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(short))) / 2)
+#define LEAF_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTLNode)) / sizeof(BTLNode)) / 2)
+
 void btree_insert(int pk, short row, short id) {
 	Buffer *b;
 	GList *l;
 
+	printf("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
@@ -289,7 +294,7 @@ void btree_insert(int pk, short row, short id) {
 		SET_USED(conf.bitmap, conf.root);
 	}
 
-	//b = get_datablock(conf.root);
+	b = get_datablock(conf.root);
 
 }
 
