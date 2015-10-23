@@ -24,6 +24,8 @@
 #define DBG(fmt, ...)
 #endif
 
+char *trim(char *);
+
 typedef struct Buffer {
 	int id;
 	char *datablock;
@@ -383,6 +385,11 @@ void insert_cmd(char *params) {
 	DBHeader *dbh;
 	EntryHeader *eh;
 
+	if (!params) {
+		printf("insert <json>\n");
+		return;
+	}
+
 	len = strlen(params);
 	if (!len) {
 		printf("Documento vazio.\n");
@@ -421,6 +428,11 @@ void select_cmd(char *params) {
 	char *buf;
 	DBHeader *dbh;
 	EntryHeader *eh;
+
+	if(!params) {
+		printf("select <id>\n");
+		return;
+	}
 
 	bid = strtok_r(params, ":", &brow);
 	id = atoi(bid);
@@ -524,6 +536,11 @@ void delete_cmd(char *params) {
 	char *brow, *bid;
 	short row, id;
 	Buffer *b;
+
+	if (!params || strlen(params) == 0) {
+		printf("delete <id>\n");
+		return;
+	}
 
 	bid = strtok_r(params, ":", &brow);
 	id = atoi(bid);
@@ -653,10 +670,10 @@ int main() {
 	FILE *fd;
 
 	printf("Pontifícia Universidade Católica do Rio Grande do Sul\n"
-			"Implementação de Banco de Dados T(128) - 4641H-04 - 2015/2\n"
+			"4641H-04 - Implementação de Banco de Dados - T(128) - 2015/2\n"
 			"Trabalho: Mini Simulador de Sistema de Gestao de Metadados\n"
-			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n"
-			"Professor: Eduardo Henrique Pereira de Arruda\n\n");
+			"Professor: Eduardo Henrique Pereira de Arruda\n"
+			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n\n");
 	// Testa para ver se já existe DATAFILE
 	if ((fd = fopen(DATAFILE, "r")) != 0)
 		fclose(fd);
