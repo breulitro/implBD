@@ -680,7 +680,9 @@ int main() {
 		fclose(fd);
 	else {
 		DBG("First run\n");
+		printf("Creating %s...", DATAFILE);
 		create_database();
+		puts("");
 	}
 
 	// Inicializa as estruturas de controle do programa.
