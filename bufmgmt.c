@@ -7,6 +7,9 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <ctype.h>
+//#include <unistd.h>
+//#include <sys/stat.h>
+#include <fcntl.h>
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
@@ -313,6 +316,17 @@ void btree_insert(int pk, short row, short id) {
 
 	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
+
+	if (!conf.root) {
+		l = g_list_first(free_blocks);
+		conf.root = (int) l->data;
+		printf("new BTree+ root = datablock(%d)\n", conf.root);
+		free_blocks = g_list_delete_link(free_blocks, l);
+		SET_USED(conf.bitmap, conf.root);
+	}
+
+	
+
 #if 0
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
@@ -674,21 +688,28 @@ int main() {
 			"Trabalho: Mini Simulador de Sistema de Gestao de Metadados\n"
 			"Professor: Eduardo Henrique Pereira de Arruda\n"
 			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n\n");
+
+	// PQ a porra do "Creating file ..." aparece depois do open?
 	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n");
+	printf("Creating file %s...", DATAFILE);
+
+	// Me explica pq eu tenho que botar essa porra de \n pro "Creating file ..."
+	// ser exibido antes do fopen()?!!
+	printf("\r\n");
+
 	// Testa para ver se já existe DATAFILE
-	if ((fd = fopen(DATAFILE, "r")) != 0)
-		fclose(fd);
-	else {
-		DBG("First run\n");
-		printf("Creating %s...", DATAFILE);
+	// FIXME; demora na primeira vez de rodar
+	if ((fd = fopen(DATAFILE, "r")) == NULL)
 		create_database();
-		puts("");
+	else {
+		fclose(fd);
 	}
 
 	// Inicializa as estruturas de controle do programa.
 	init_database();
 	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
+	// Command Line Interface code
 	rl_attempted_completion_function = cmd_completion;
 	do {
 		cmd = readline(prompt);
