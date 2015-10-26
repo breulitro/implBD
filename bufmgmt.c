@@ -430,6 +430,7 @@ void insert_cmd(char *params) {
 	memcpy(&b->datablock[eh->init], params, len);
 	b->dirty = 1;
 
+	// Conferir com o professor se no RowId o row pode começar em 1
 	btree_insert(eh->pk, dbh->header_len - 1, b->id);
 }
 
@@ -530,7 +531,7 @@ void delete(char *datablock, short row) {
 	EntryHeader *eh, *ehaux;
 
 	dbh = DBH(datablock);
-	eh = EH(dbh, row + 1);
+	eh = EH(dbh, row + 1); // Row começa em 1
 
 	// Como não da pra mudar o RowId, o datablock fica com um EntryHeader queimado
 	eh->pk = 0; // pk começa em 1, 0 indica que o EntryHeader é inválido
