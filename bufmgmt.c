@@ -713,7 +713,7 @@ int main() {
 	// Command Line Interface code
 	rl_attempted_completion_function = cmd_completion;
 
-	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n");
+	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n\n");
 
 	do {
 		cmd = readline(prompt);
