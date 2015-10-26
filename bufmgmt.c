@@ -719,7 +719,6 @@ int main() {
 		cmd = readline(prompt);
 		rl_bind_key('\t',rl_complete);
 
-		// Gambiarra para interpretar "quit" e "exit" corretamente
 		aux = cmd;
 		aux = trim(aux);
 		if (!strcmp(aux, "exit") || !strcmp(aux, "quit")){
