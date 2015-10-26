@@ -184,7 +184,7 @@ void create_database() {
 	fwrite(&conf, sizeof(Config), 1, fd);
 	fclose(fd);
 
-	DBG("datafile created\n");
+	printf("%s created.\n", DATAFILE);
 }
 
 void init_database() {
@@ -689,8 +689,7 @@ int main() {
 			"Professor: Eduardo Henrique Pereira de Arruda\n"
 			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n\n");
 
-	// PQ a porra do "Creating file ..." aparece depois do open?
-	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n");
+	// PQ a porra do "Creating file ..." aparece depois do fopen()?
 	printf("Creating file %s...", DATAFILE);
 
 	// Me explica pq eu tenho que botar essa porra de \n pro "Creating file ..."
@@ -702,8 +701,8 @@ int main() {
 	if ((fd = fopen(DATAFILE, "r")) == NULL)
 		create_database();
 	else {
-		//Gambiarra pra apagar o "Creating file ..."
-		printf("\e[1A\e[2K\n");
+		// Gambiarra pra apagar o "Creating file ..."
+		printf("\e[1A\e[2K");
 		fclose(fd);
 	}
 
@@ -713,6 +712,9 @@ int main() {
 
 	// Command Line Interface code
 	rl_attempted_completion_function = cmd_completion;
+
+	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n");
+
 	do {
 		cmd = readline(prompt);
 		rl_bind_key('\t',rl_complete);
