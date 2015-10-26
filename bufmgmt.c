@@ -690,10 +690,10 @@ int main() {
 
 	// Testa para ver se já existe DATAFILE
 	if ((fd = fopen(DATAFILE, "r")) == NULL) {
-		printf("Criando arquivo %s...", DATAFILE);
+		printf("Criando arquivo \"%s\"...", DATAFILE);
 		fflush(stdout);
 		create_database();
-		printf("\n%s criado.\n", DATAFILE);
+		printf("\nArquivo \"%s\" criado.\n", DATAFILE);
 	} else {
 		fclose(fd);
 	}
