@@ -695,13 +695,15 @@ int main() {
 
 	// Me explica pq eu tenho que botar essa porra de \n pro "Creating file ..."
 	// ser exibido antes do fopen()?!!
-	printf("\r\n");
+	printf("\n");
 
 	// Testa para ver se já existe DATAFILE
-	// FIXME; demora na primeira vez de rodar
+	// FIXME; fopen() demora quando o arquivo não existe
 	if ((fd = fopen(DATAFILE, "r")) == NULL)
 		create_database();
 	else {
+		//Gambiarra pra apagar o "Creating file ..."
+		printf("\e[1A\e[2K\n");
 		fclose(fd);
 	}
 
