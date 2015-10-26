@@ -9,7 +9,7 @@
 #include <ctype.h>
 //#include <unistd.h>
 //#include <sys/stat.h>
-#include <fcntl.h>
+//#include <fcntl.h>
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
@@ -156,7 +156,6 @@ void persist() {
 
 			fclose(fd);
 		}
-
 	}
 }
 
@@ -165,7 +164,7 @@ void create_database() {
 
 	fd = fopen(DATAFILE, "w");
 	if (ftruncate(fileno(fd), FILESIZE) < 0)
-		perror("ftruncate");
+		perror("ftruncate"), exit(1);
 	fclose(fd);
 
 	fd = fopen(DATAFILE, "r+");
@@ -224,6 +223,7 @@ Buffer *get_insertable_datablock(int len) {
 		return NULL;
 	}
 
+	// Caso ainda não haja um datablock inicial para a tabela.
 	if (!conf.table) {
 		id = g_list_first(free_blocks);
 		conf.table = (int) id->data;
@@ -300,6 +300,7 @@ typedef struct {
 #define BRANCH_D 2L
 #define LEAF_D 2L
 #endif
+
 #define BR(block, i) (BTBNode *) (i ? (block + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : block + sizeof(BTHeader))
 #define LF(block, i) (BTLNode *) (block + sizeof(BTHeader) + i * sizeof(BTLNode))
 
@@ -317,15 +318,14 @@ void btree_insert(int pk, short row, short id) {
 	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
 	printf("inserindo %d @ %d:%d\n", pk, id, row);
 
+	// Caso não haja um datablock inicial para a BTree+
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
 		conf.root = (int) l->data;
-		printf("new BTree+ root = datablock(%d)\n", conf.root);
+		printf("new BTree+ root @ datablock(%d)\n", conf.root);
 		free_blocks = g_list_delete_link(free_blocks, l);
 		SET_USED(conf.bitmap, conf.root);
 	}
-
-	
 
 #if 0
 	if (!conf.root) {
