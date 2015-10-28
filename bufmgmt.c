@@ -313,7 +313,7 @@ RowId btree_leaf_get(short id, int pk) {
 	BTBNode *br;
 	int i;
 
-	b = get_datablock(conf.root);
+	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
 
 	for (i = 0; i < bth->len; i++) {
@@ -333,15 +333,16 @@ RowId btree_branch_get(short id, int pk) {
 	BTBNode *br;
 	int i;
 
+	printf("Search na branch\n");
 	b = get_datablock(conf.root);
 	bth = (BTHeader *) b->datablock;
 
 	for (i = 0; i < bth->len; i++) {
 		br = BR(bth, i);
-		if (br->pk < pk)
+		if (br->pk < pk) {
 			continue;
-		else {
-			b = get_datablock(br->maior);
+		} else {
+			b = get_datablock(br->menor);
 			bth = (BTHeader *) b->datablock;
 			if (bth->type == LEAF)
 				return btree_leaf_get(b->id, pk);
@@ -349,6 +350,13 @@ RowId btree_branch_get(short id, int pk) {
 				return btree_branch_get(b->id, pk);
 		}
 	}
+
+	b = get_datablock(br->maior);
+	bth = (BTHeader *) b->datablock;
+	if (bth->type == LEAF)
+		return btree_leaf_get(b->id, pk);
+	else
+		return btree_branch_get(b->id, pk);
 
 	// ERRO: não era pra cair aqui...
 	return (RowId){0,0};
