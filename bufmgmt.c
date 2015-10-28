@@ -303,14 +303,10 @@ typedef struct {
 #define BR(block, i) ((BTBNode *) (i ? ((char *)(block) + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
 #define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + i * sizeof(BTLNode))))
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-
 RowId btree_leaf_get(short id, int pk) {
 	Buffer *b;
 	BTHeader *bth;
 	BTLNode *lf;
-	BTBNode *br;
 	int i;
 
 	b = get_datablock(id);
@@ -329,7 +325,6 @@ RowId btree_leaf_get(short id, int pk) {
 RowId btree_branch_get(short id, int pk) {
 	Buffer *b;
 	BTHeader *bth;
-	BTLNode *lf;
 	BTBNode *br;
 	int i;
 
@@ -365,8 +360,6 @@ RowId btree_branch_get(short id, int pk) {
 RowId btree_get(int pk) {
 	Buffer *b;
 	BTHeader *bth;
-	BTLNode *lf;
-	BTBNode *br;
 
 	b = get_datablock(conf.root);
 	bth = (BTHeader *) b->datablock;
@@ -377,6 +370,8 @@ RowId btree_get(int pk) {
 		return btree_branch_get(b->id, pk);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 void btree_dump_leaf(short id, int padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
@@ -664,9 +659,7 @@ void insert_cmd(char *params) {
 
 // WARN: Não é feita verificação se existe realmente o RowId em questão
 void select_cmd(char *params) {
-	char *brow, *bid;
 	int pk;
-	short row, id;
 	Buffer *b;
 	char *buf;
 	DBHeader *dbh;
@@ -677,11 +670,7 @@ void select_cmd(char *params) {
 		printf("select <id>\n");
 		return;
 	}
-/*
-	bid = strtok_r(params, ":", &brow);
-	id = atoi(bid);
-	row = atoi(brow);
-*/
+
 	pk = atoi(params);
 	r = btree_get(pk);
 	if (!r.id && !r.row) {
@@ -783,8 +772,6 @@ void delete(char *datablock, short row) {
 }
 
 void delete_cmd(char *params) {
-	char *brow, *bid;
-	short row, id;
 	Buffer *b;
 	int pk;
 	RowId r;
@@ -793,11 +780,7 @@ void delete_cmd(char *params) {
 		printf("delete <id>\n");
 		return;
 	}
-/*
-	bid = strtok_r(params, ":", &brow);
-	id = atoi(bid);
-	row = atoi(brow);
-*/
+
 	pk = atoi(params);
 	r = btree_get(pk);
 	if (!r.id && !r.row) {
