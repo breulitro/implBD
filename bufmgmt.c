@@ -305,6 +305,70 @@ typedef struct {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
+
+RowId btree_leaf_get(short id, int pk) {
+	Buffer *b;
+	BTHeader *bth;
+	BTLNode *lf;
+	BTBNode *br;
+	int i;
+
+	b = get_datablock(conf.root);
+	bth = (BTHeader *) b->datablock;
+
+	for (i = 0; i < bth->len; i++) {
+		lf = LF(bth, i);
+		if (lf->pk == pk)
+			return lf->rowid;
+	}
+
+	// ERRO: pk não encontrada
+	return (RowId){0,0};
+}
+
+RowId btree_branch_get(short id, int pk) {
+	Buffer *b;
+	BTHeader *bth;
+	BTLNode *lf;
+	BTBNode *br;
+	int i;
+
+	b = get_datablock(conf.root);
+	bth = (BTHeader *) b->datablock;
+
+	for (i = 0; i < bth->len; i++) {
+		br = BR(bth, i);
+		if (br->pk < pk)
+			continue;
+		else {
+			b = get_datablock(br->maior);
+			bth = (BTHeader *) b->datablock;
+			if (bth->type == LEAF)
+				return btree_leaf_get(b->id, pk);
+			else
+				return btree_branch_get(b->id, pk);
+		}
+	}
+
+	// ERRO: não era pra cair aqui...
+	return (RowId){0,0};
+}
+
+RowId btree_get(int pk) {
+	Buffer *b;
+	BTHeader *bth;
+	BTLNode *lf;
+	BTBNode *br;
+
+	b = get_datablock(conf.root);
+	bth = (BTHeader *) b->datablock;
+
+	if (bth->type == LEAF)
+		return btree_leaf_get(b->id, pk);
+	else
+		return btree_branch_get(b->id, pk);
+}
+
 void btree_dump_leaf(short id, int padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
@@ -593,24 +657,33 @@ void insert_cmd(char *params) {
 // WARN: Não é feita verificação se existe realmente o RowId em questão
 void select_cmd(char *params) {
 	char *brow, *bid;
+	int pk;
 	short row, id;
 	Buffer *b;
 	char *buf;
 	DBHeader *dbh;
 	EntryHeader *eh;
+	RowId r;
 
 	if(!params) {
 		printf("select <id>\n");
 		return;
 	}
-
+/*
 	bid = strtok_r(params, ":", &brow);
 	id = atoi(bid);
 	row = atoi(brow);
+*/
+	pk = atoi(params);
+	r = btree_get(pk);
+	if (!r.id && !r.row) {
+		printf("Arquivo não existe\n");
+		return;
+	}
 
-	b = get_datablock(id);
+	b = get_datablock(r.id);
 	dbh = DBH(b->datablock);
-	eh = EH(dbh, row + 1);// Row começa em 1
+	eh = EH(dbh, r.row + 1);// Row começa em 1
 
 	if (!eh->pk) {
 		printf("Documento deletado\n");
@@ -705,18 +778,27 @@ void delete_cmd(char *params) {
 	char *brow, *bid;
 	short row, id;
 	Buffer *b;
+	int pk;
+	RowId r;
 
 	if (!params || strlen(params) == 0) {
 		printf("delete <id>\n");
 		return;
 	}
-
+/*
 	bid = strtok_r(params, ":", &brow);
 	id = atoi(bid);
 	row = atoi(brow);
+*/
+	pk = atoi(params);
+	r = btree_get(pk);
+	if (!r.id && !r.row) {
+		printf("Arquivo não existe\n");
+		return;
+	}
 
-	b = get_datablock(id);
-	delete(b->datablock, row);
+	b = get_datablock(r.id);
+	delete(b->datablock, r.row);
 }
 
 void load_cmd(char *params) {
