@@ -1,5 +1,5 @@
 all:
-	gcc -Wall bufmgmt.c -g `pkg-config --cflags --libs glib-2.0` -lreadline -o sgbd -std=c99
+	gcc bufmgmt.c -g `pkg-config --cflags --libs glib-2.0` -lreadline -o sgbd -std=c99 -D_XOPEN_SOURCE=700
 	rm -f .datafile
 
 debug:

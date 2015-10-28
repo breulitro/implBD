@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
+//#include <string.h>
+#include <strings.h>
 #include <assert.h>
 #include <glib.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <ctype.h>
+#include <sys/types.h>
 //#include <unistd.h>
 //#include <sys/stat.h>
 //#include <fcntl.h>
@@ -172,7 +174,7 @@ void create_database() {
 		perror("Criando datafile"), exit(1);
 
 	// Escrevendo configuração
-	bzero(&conf, sizeof(Config));
+	memset(&conf, 0, sizeof(Config));
 	conf.nextpk = 1;
 
 	// Seta como usado os buffers iniciais utilizados para a configuração
@@ -224,7 +226,7 @@ Buffer *get_insertable_datablock(int len) {
 	// Caso ainda não haja um datablock inicial para a tabela.
 	if (!conf.table) {
 		id = g_list_first(free_blocks);
-		conf.table = (int) id->data;
+		conf.table = *(int *) id->data;
 		free_blocks = g_list_delete_link(free_blocks, id);
 		SET_USED(conf.bitmap, conf.table);
 	}
@@ -244,9 +246,9 @@ Buffer *get_insertable_datablock(int len) {
 			}
 
 			b->dirty = 1;
-			b = get_datablock((int) id->data);
-			dbh->next = (int) id->data;
-			SET_USED(conf.bitmap, (int) id->data);
+			b = get_datablock(*(int *) id->data);
+			dbh->next = *(int *) id->data;
+			SET_USED(conf.bitmap, *(int *) id->data);
 			free_blocks = g_list_delete_link(free_blocks, id);
 		}
 
@@ -450,7 +452,7 @@ void btree_leaf_split(short id) {
 	// Aloca novo nodo folha
 	lf = LF(bth, LEAF_D);
 	l = g_list_first(free_blocks);
-	i = (int)l->data;
+	i = *(int *)l->data;
 	free_blocks = g_list_delete_link(free_blocks, l);
 	SET_USED(conf.bitmap, i);
 	newb = get_datablock(i);
@@ -464,7 +466,7 @@ void btree_leaf_split(short id) {
 
 	//Aloca novo nodo raiz
 	l = g_list_first(free_blocks);
-	i = (int)l->data;
+	i = *(int *)l->data;
 	free_blocks = g_list_delete_link(free_blocks, l);
 	SET_USED(conf.bitmap, i);
 	newroot = get_datablock(i);
@@ -537,7 +539,7 @@ void btree_insert(int pk, short row, short id) {
 	// Caso não haja um datablock inicial para a BTree+
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
-		conf.root = (int) l->data;
+		conf.root = *(int *) l->data;
 		DBG("new BTree+ root @ datablock(%d)\n", conf.root);
 		free_blocks = g_list_delete_link(free_blocks, l);
 		SET_USED(conf.bitmap, conf.root);
