@@ -725,7 +725,7 @@ void search_cmd(char *params) {
 			if (!eh->pk)
 				continue;
 
-			if (strnstr(&b->datablock[eh->init], params, eh->offset)) {
+			if (g_strstr_len(&b->datablock[eh->init], eh->offset, params)) {
 				te = malloc(sizeof(TableEntry));
 				te->json = malloc(eh->offset + 1);
 				te->json = memcpy(te->json, &b->datablock[eh->init], eh->offset);
@@ -954,6 +954,7 @@ int main() {
 		free(cmd);
 		if (hist && *hist)
 			add_history(hist);
+		free(hist);
 	} while (1);
 
 	clear_history();
@@ -963,6 +964,8 @@ int main() {
 	for (int i = 0; i < framesLen; i++) {
 		free(frames[i].datablock);
 	}
+
+	clear_history();
 
 	g_list_free(free_blocks);
 
