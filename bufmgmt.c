@@ -303,6 +303,8 @@ typedef struct {
 #define BR(block, i) ((BTBNode *) (i ? ((char *)(block) + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
 #define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + i * sizeof(BTLNode))))
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 void btree_dump_leaf(short id, int padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
@@ -453,8 +455,6 @@ void btree_insert_node(short id, int pk, RowId rowid) {
 }
 
 void btree_insert(int pk, short row, short id) {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
 	Buffer *b;
 	GList *l;
 	BTHeader *bth;
