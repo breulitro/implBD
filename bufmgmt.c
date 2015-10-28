@@ -919,7 +919,7 @@ int main() {
 
 	printf("Pontifícia Universidade Católica do Rio Grande do Sul\n"
 			"4641H-04 - Implementação de Banco de Dados - T(128) - 2015/2\n"
-			"Trabalho: Mini Simulador de Sistema de Gestao de Metadados\n"
+			"Trabalho: Mini Simulador de Sistema de Gestão de Metadados\n"
 			"Professor: Eduardo Henrique Pereira de Arruda\n"
 			"Aluno: Benito Oswaldo João Romeo Luiz Michelon e Silva\n\n");
 
