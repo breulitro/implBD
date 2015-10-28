@@ -272,6 +272,7 @@ typedef struct {
 	short len;
 	short prev;
 	short next;
+	short parent;
 	BTType type;
 } BTHeader;
 
@@ -279,9 +280,9 @@ typedef struct {
 // prev e no next pra estrutura ficar uniforme. Isso deixa a estrutura com 12 bytes.
 // E não é isso que a gente quer, queremos ela com seus 8 bytes enxutos!
 typedef struct {
-	short prev;
+	short menor;
 	int pk;
-	short next;
+	short maior;
 } __attribute__((__packed__)) BTBNode;
 
 typedef struct {
@@ -300,7 +301,115 @@ typedef struct {
 #endif
 
 #define BR(block, i) (BTBNode *) (i ? (block + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : block + sizeof(BTHeader))
-#define LF(block, i) (BTLNode *) (block + sizeof(BTHeader) + i * sizeof(BTLNode))
+#define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + i * sizeof(BTLNode))))
+
+void btree_dump_leaf(short id, int padding) {
+	Buffer *b, *newroot, *newb;
+	GList *l;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+	int i, p;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+
+	for (p = 0; p < padding; p++)
+		printf("\t");
+
+	for (i = 0; i < bth->len; i++) {
+		lf = LF(bth, i);
+		printf("%d ", lf->pk);
+	}
+
+	printf("\n");
+}
+
+void _btree_dump(short id, int padding) {
+	Buffer *b, *newroot, *newb;
+	GList *l;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+	int i, p;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+
+	if (bth->type == LEAF)
+		btree_dump_leaf(b->id, padding + 1);
+	else {
+		for (i = 0; i < bth->len; i++) {
+			br = BR(bth, i);
+			_btree_dump(br->menor, padding + 1);
+			for (p = 0; p < padding; p++)
+				printf("\t");
+			printf("%d\n", br->pk);
+			_btree_dump(br->maior, padding + 1);
+		}
+	}
+}
+void btree_dump() {
+	Buffer *b, *newroot, *newb;
+	GList *l;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+	int i;
+
+	if (!conf.root) {
+		printf("Btree+ vazia\n");
+		return;
+	}
+
+	_btree_dump(conf.root, 0);
+}
+
+void btree_leaf_split(short id) {
+	Buffer *b, *newroot, *newb;
+	GList *l;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+	int i;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+
+	printf("TBD\n");
+
+}
+
+void btree_insert_node(short id, int pk, RowId rowid) {
+	Buffer *b;
+	GList *l;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+	int i;
+
+	printf("Inserindo btree no datablock(%d)\n", id);
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+
+	if (bth->type == LEAF) {
+		lf = LF(bth, bth->len);
+		printf("bth @ %d\n", (int)((char *)bth - b->datablock) % DATABLOCK);
+		assert((int)((char *)bth - b->datablock) % DATABLOCK == 0);
+		printf("lf @ %d\n", (int)((char *)lf - (char *)bth) % DATABLOCK);
+		assert((int)((char *)lf - (char *)bth) % DATABLOCK == sizeof(BTHeader));
+
+		lf->pk = pk;
+		//lf->rowid.row = rowid.row;
+		//lf->rowid.id = rowid.id;
+		bth->len++;
+		if (bth->len > 2 * LEAF_D)
+			btree_leaf_split(b->id);
+	} else {
+		br = BR(bth, bth->len - 1);
+		btree_insert_node(br->maior, pk, rowid);
+	}
+}
 
 void btree_insert(int pk, short row, short id) {
 #pragma GCC diagnostic push
@@ -310,6 +419,7 @@ void btree_insert(int pk, short row, short id) {
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
+	RowId rowid;
 	int i;
 #pragma GCC diagnostic pop
 
@@ -320,24 +430,31 @@ void btree_insert(int pk, short row, short id) {
 	if (!conf.root) {
 		l = g_list_first(free_blocks);
 		conf.root = (int) l->data;
-		printf("new BTree+ root @ datablock(%d)\n", conf.root);
+		DBG("new BTree+ root @ datablock(%d)\n", conf.root);
 		free_blocks = g_list_delete_link(free_blocks, l);
 		SET_USED(conf.bitmap, conf.root);
 	}
 
-#if 0
-	if (!conf.root) {
-		l = g_list_first(free_blocks);
-		conf.root = (int) l->data;
-		free_blocks = g_list_delete_link(free_blocks, l);
-		SET_USED(conf.bitmap, conf.root);
-	}
 
 	b = get_datablock(conf.root);
 	bth = (BTHeader *) b->datablock;
-	if (!bth->len)
+	if (!bth->len) {
 		bth->type = LEAF;
+		bth->next = bth->prev = bth->parent = 0;
+	}
 
+	rowid.row = row;
+	rowid.id = id;
+	// Como sabemos que pk é o maior valor existente na BTree+,
+	// pois ele é serial, inserimos ele sempre no final do nodo.
+	if (bth->type == LEAF) {
+		btree_insert_node(b->id, pk, rowid);
+	} else {
+		br = BR(bth, bth->len - 1);
+		btree_insert_node(br->maior, pk, rowid);
+	}
+
+#if 0
 	for (i = 0; i < bth->len; i++) {
 		if (bth->type == LEAF) {
 			lf = LF(bth, i);
@@ -615,6 +732,8 @@ void parse_cmds(char *full_cmd) {
 		delete_cmd(param);
 	else if (!(strcmp(cmd, "load")))
 		load_cmd(param);
+	else if (!(strcmp(cmd, "btreedump")))
+		btree_dump();
 	else if (!(strcmp(cmd, "persist"))) {
 		persist();
 		framesLen = 0;
@@ -624,7 +743,7 @@ void parse_cmds(char *full_cmd) {
 		printf("cmd unknown.\n");
 }
 
-char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit"};
+char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump"};
 
 char* cmd_generator(const char *text, int state) {
 	static int list_index, len;
