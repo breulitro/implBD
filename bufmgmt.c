@@ -300,7 +300,7 @@ typedef struct {
 #define LEAF_D 2L
 #endif
 
-#define BR(block, i) (BTBNode *) (i ? (block + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : block + sizeof(BTHeader))
+#define BR(block, i) ((BTBNode *) (i ? ((char *)(block) + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
 #define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + i * sizeof(BTLNode))))
 
 void btree_dump_leaf(short id, int padding) {
@@ -362,22 +362,61 @@ void btree_dump() {
 		return;
 	}
 
-	_btree_dump(conf.root, 0);
+	_btree_dump(conf.root, -1);
 }
 
 void btree_leaf_split(short id) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
-	BTHeader *bth;
+	BTHeader *bth, *nbth, *rbth;
 	BTBNode *br;
-	BTLNode *lf;
+	BTLNode *lf, *nlf;
 	int i;
 
+	printf("Leaf Split\n");
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
+	b->dirty = 1;
 
-	printf("TBD\n");
+	// Aloca novo nodo folha
+	lf = LF(bth, LEAF_D);
+	l = g_list_first(free_blocks);
+	i = (int)l->data;
+	free_blocks = g_list_delete_link(free_blocks, l);
+	SET_USED(conf.bitmap, i);
+	newb = get_datablock(i);
+	newb->id = i;
+	newb->dirty = 1;
+	nbth = (BTHeader *) newb->datablock;
+	nbth->type = LEAF;
+	nlf = LF(nbth, 0);
+	memcpy(nlf, lf, sizeof(BTLNode) * (LEAF_D + 1));
+	nbth->len = LEAF_D + 1;
 
+	//Aloca novo nodo raiz
+	l = g_list_first(free_blocks);
+	i = (int)l->data;
+	free_blocks = g_list_delete_link(free_blocks, l);
+	SET_USED(conf.bitmap, i);
+	newroot = get_datablock(i);
+	newroot->id = i;
+	newroot->dirty = 1;
+	rbth = (BTHeader *) newroot->datablock;
+	rbth->type = BRANCH;
+	br = BR(rbth, 0);
+	br->pk = nlf->pk;
+	br->menor = b->id;
+	br->maior = newb->id;
+	rbth->len = 1;
+
+	// Faz os apontamentos dos nodos
+	bth->next = newb->id;
+	nbth->prev = b->id;
+	nbth->next = 0;
+	rbth->next = nbth->prev = 0;
+
+	bth->len = LEAF_D;
+	conf.root = newroot->id;
 }
 
 void btree_insert_node(short id, int pk, RowId rowid) {
@@ -394,15 +433,17 @@ void btree_insert_node(short id, int pk, RowId rowid) {
 
 	if (bth->type == LEAF) {
 		lf = LF(bth, bth->len);
+		/*
 		printf("bth @ %d\n", (int)((char *)bth - b->datablock) % DATABLOCK);
 		assert((int)((char *)bth - b->datablock) % DATABLOCK == 0);
 		printf("lf @ %d\n", (int)((char *)lf - (char *)bth) % DATABLOCK);
 		assert((int)((char *)lf - (char *)bth) % DATABLOCK == sizeof(BTHeader));
-
+		*/
 		lf->pk = pk;
-		//lf->rowid.row = rowid.row;
-		//lf->rowid.id = rowid.id;
+		lf->rowid.row = rowid.row;
+		lf->rowid.id = rowid.id;
 		bth->len++;
+		b->dirty = 1;
 		if (bth->len > 2 * LEAF_D)
 			btree_leaf_split(b->id);
 	} else {
@@ -743,7 +784,7 @@ void parse_cmds(char *full_cmd) {
 		printf("cmd unknown.\n");
 }
 
-char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump"};
+char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump", NULL};
 
 char* cmd_generator(const char *text, int state) {
 	static int list_index, len;
