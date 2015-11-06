@@ -246,7 +246,7 @@ Buffer *get_insertable_datablock() {
 	while (dbh->free <  sizeof(EntryHeader)) {
 		printf("entrou no while\n");
 		sleep(1);
-		DBG("dbh->free(%d) < sizeof(EntryHeader)(%d)\n", dbh->free, sizeof(EntryHeader));
+		DBG("dbh->free(%d) < sizeof(EntryHeader)(%lu)\n", dbh->free, sizeof(EntryHeader));
 		DBG("next(%d)\n", dbh->next);
 		if (dbh->next) {
 			DBG("Ja existe proximo datablock\n");
@@ -316,8 +316,45 @@ typedef struct {
 #define LEAF_D 2L
 #endif
 
-#define BR(block, i) ((BTBNode *) (i ? ((char *)(block) + sizeof(BTHeader) + i * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
-#define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + i * sizeof(BTLNode))))
+#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
+#define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + (i) * sizeof(BTLNode))))
+void _btree_delete(int pk, int id) {
+	Buffer *b;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf, *laux = NULL;
+
+	b = get_datablock(id);
+	bth = (BTHeader *)b->datablock;
+	printf("btree->len = %d\n", bth->len);
+
+	if (bth->type == LEAF) {
+		for (int i = 0; i < bth->len; i++) {
+			lf = LF(bth, i);
+			if (lf->pk == 0)
+				continue;
+
+			if (lf->pk == pk) {
+				laux = LF(bth, i + 1);
+				bth->len = bth->len - 1;
+				lf = memcpy(lf, laux, bth->len * sizeof(BTLNode));
+				return;
+			}
+		}
+	} else {
+		printf("TBD\n");
+		return;
+		for (int i = 0; i < bth->len; i++) {
+			;
+		}
+	}
+	// Se é igual, é pq é o último
+	printf("btree->len = %d\n", bth->len);
+}
+
+void btree_delete(int pk) {
+	_btree_delete(pk, conf.root);
+}
 
 RowId btree_leaf_get(short id, int pk) {
 	Buffer *b;
@@ -643,13 +680,13 @@ RowId insert(char *json, char chained) {
 	}
 
 	dbh = DBH(b->datablock);
-	DBG("insertable datablock with %d bytes, json with %d\n bytes", dbh->free, strlen(json));
+	DBG("insertable datablock with %d bytes, json with %lu\n bytes", dbh->free, strlen(json));
 
 	DBG("Chegando pra inserir: %s\n", json);
 	len = strlen(json);
 	dbh = DBH(b->datablock);
 	dbh->header_len++;
-	DBG("dbh->free(%d) - sizeof(EntryHeader)(%d) = %d\n", dbh->free, sizeof(EntryHeader), dbh->free - sizeof(EntryHeader));
+	DBG("dbh->free(%d) - sizeof(EntryHeader)(%lu) = %lu\n", dbh->free, sizeof(EntryHeader), dbh->free - sizeof(EntryHeader));
 	dbh->free = dbh->free - sizeof(EntryHeader);
 	DBG("dbh->free(%d)\n", dbh->free);
 	eh = EH(dbh, dbh->header_len);
@@ -682,11 +719,11 @@ RowId insert(char *json, char chained) {
 	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
 			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
 
-	DBG("copiando para a posição %d do buffer\n", &b->datablock[eh->init] - b->datablock);
+	DBG("copiando para a posição %ld do buffer\n", &b->datablock[eh->init] - b->datablock);
 	DBG("writing %d bytes @ %d\n", eh->offset, eh->init);
 	DBG("antes pk = %d\n", eh->pk);
-	DBG("pk @ %d\n", (char *)&eh->pk - b->datablock);
-	DBG("eh @ %d\n", (char *)eh - b->datablock);
+	DBG("pk @ %ld\n", (char *)&eh->pk - b->datablock);
+	DBG("eh @ %ld\n", (char *)eh - b->datablock);
 	memcpy(&b->datablock[eh->init], json, eh->offset);
 	DBG("depois pk = %d\n", eh->pk);
 
@@ -868,6 +905,7 @@ void search_cmd(char *params) {
 }
 
 void delete(char *datablock, short row) {
+	Buffer *b;
 	DBHeader *dbh;
 	EntryHeader *eh, *ehaux;
 
@@ -884,6 +922,11 @@ void delete(char *datablock, short row) {
 		// ehaux->offset continua o mesmo
 	}
 
+	if (*(int *)&eh->next != 0) {
+		b = get_datablock(eh->next.id);
+		delete(b->datablock, eh->next.row);
+		b->dirty = 1;
+	}
 }
 
 void delete_cmd(char *params) {
@@ -904,7 +947,10 @@ void delete_cmd(char *params) {
 	}
 
 	b = get_datablock(r.id);
+	b->dirty = 1;
 	delete(b->datablock, r.row);
+
+	btree_delete(pk);
 }
 
 void load_cmd(char *params) {
@@ -923,7 +969,7 @@ void load_cmd(char *params) {
 	while ((linelen = getline(&line, &linecap, fp)) > 0) {
 		if (linelen > 1) {
 			line[linelen - 1] = 0;
-			DBG("inserting json(%d): %s\n", strlen(line), line);
+			DBG("inserting json(%lu): %s\n", strlen(line), line);
 			insert_cmd(line);
 		}
 	}
