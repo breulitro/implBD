@@ -463,7 +463,9 @@ void _btree_dump(short id, int padding) {
 	else {
 		for (i = 0; i < bth->len; i++) {
 			br = BR(bth, i);
-			_btree_dump(br->menor, padding + 1);
+			if (!i) {
+				_btree_dump(br->menor, padding + 1);
+			}
 			for (p = 0; p < padding; p++)
 				printf("\t");
 			printf("%d\n", br->pk);
@@ -471,6 +473,7 @@ void _btree_dump(short id, int padding) {
 		}
 	}
 }
+
 void btree_dump() {
 	Buffer *b, *newroot, *newb;
 	GList *l;
@@ -487,6 +490,21 @@ void btree_dump() {
 	_btree_dump(conf.root, -1);
 }
 
+void btree_insert_branch(short id, int pk, short menor, short maior) {
+	Buffer *b;
+	BTHeader *bth;
+	BTBNode *br;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+	br = BR(bth, bth->len);
+	bth->len = bth->len + 1;
+	br->pk = pk;
+	br->menor = menor;
+	br->maior = maior;
+	b->dirty = 1;
+}
+
 void btree_leaf_split(short id) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
@@ -501,44 +519,57 @@ void btree_leaf_split(short id) {
 	b->dirty = 1;
 
 	// Aloca novo nodo folha
-	lf = LF(bth, LEAF_D);
 	l = g_list_first(free_blocks);
 	i = (int)l->data;
 	free_blocks = g_list_delete_link(free_blocks, l);
 	SET_USED(conf.bitmap, i);
 	newb = get_datablock(i);
+
+	// Setup do novo nodo
 	newb->id = i;
 	newb->dirty = 1;
 	nbth = (BTHeader *) newb->datablock;
 	nbth->type = LEAF;
+
+	// Posiciona lf na metade
+	lf = LF(bth, LEAF_D);
+	// Posiciona nlf no começo
 	nlf = LF(nbth, 0);
+	// Copia da metade em diate do nodo $id para nlf
 	memcpy(nlf, lf, sizeof(BTLNode) * (LEAF_D + 1));
 	nbth->len = LEAF_D + 1;
 
-	//Aloca novo nodo raiz
-	l = g_list_first(free_blocks);
-	i = (int)l->data;
-	free_blocks = g_list_delete_link(free_blocks, l);
-	SET_USED(conf.bitmap, i);
-	newroot = get_datablock(i);
-	newroot->id = i;
-	newroot->dirty = 1;
-	rbth = (BTHeader *) newroot->datablock;
-	rbth->type = BRANCH;
-	br = BR(rbth, 0);
-	br->pk = nlf->pk;
-	br->menor = b->id;
-	br->maior = newb->id;
-	rbth->len = 1;
-
-	// Faz os apontamentos dos nodos
+	// Apontamento dos simblings
 	bth->next = newb->id;
 	nbth->prev = b->id;
-	nbth->next = 0;
-	rbth->next = nbth->prev = 0;
+
+	if (!bth->parent) {
+		//Aloca novo nodo raiz
+		l = g_list_first(free_blocks);
+		i = (int)l->data;
+		free_blocks = g_list_delete_link(free_blocks, l);
+		SET_USED(conf.bitmap, i);
+		newroot = get_datablock(i);
+		newroot->id = i;
+		newroot->dirty = 1;
+		rbth = (BTHeader *) newroot->datablock;
+		rbth->type = BRANCH;
+		br = BR(rbth, 0);
+		br->pk = nlf->pk;
+		br->menor = b->id;
+		br->maior = newb->id;
+		rbth->len = 1;
+
+		// Apontamento dos parents
+		bth->parent = nbth->parent = i;
+		conf.root = i;
+	} else {
+		btree_insert_branch(bth->parent, nlf->pk, b->id, newb->id);
+	}
+
 
 	bth->len = LEAF_D;
-	conf.root = newroot->id;
+	//conf.root = newroot->id;
 }
 
 void btree_insert_node(short id, int pk, RowId rowid) {
@@ -570,7 +601,10 @@ void btree_insert_node(short id, int pk, RowId rowid) {
 			btree_leaf_split(b->id);
 	} else {
 		br = BR(bth, bth->len - 1);
-		btree_insert_node(br->maior, pk, rowid);
+		if (pk < br->pk)
+			btree_insert_node(br->menor, pk, rowid);
+		else
+			btree_insert_node(br->maior, pk, rowid);
 	}
 }
 
@@ -599,9 +633,10 @@ void btree_insert(int pk, short row, short id) {
 
 	b = get_datablock(conf.root);
 	bth = (BTHeader *) b->datablock;
+
+	// Caso não tenha nenhuma entrada na BTree é pq éla está vazia, logo é LEAF
 	if (!bth->len) {
 		bth->type = LEAF;
-		bth->next = bth->prev = bth->parent = 0;
 	}
 
 	rowid.row = row;
@@ -611,8 +646,12 @@ void btree_insert(int pk, short row, short id) {
 	if (bth->type == LEAF) {
 		btree_insert_node(b->id, pk, rowid);
 	} else {
-		br = BR(bth, bth->len);
-		btree_insert_node(br->maior, pk, rowid);
+		DBG("Não é LEAF!\n");
+		br = BR(bth, bth->len - 1);
+		if (pk < br->pk)
+			btree_insert_node(br->menor, pk, rowid);
+		else
+			btree_insert_node(br->maior, pk, rowid);
 	}
 
 #if 0
@@ -684,6 +723,7 @@ RowId insert(char *json, char chained) {
 
 	DBG("Chegando pra inserir: %s\n", json);
 	len = strlen(json);
+	DBG("len = %d\n", len);
 	dbh = DBH(b->datablock);
 	dbh->header_len++;
 	DBG("dbh->free(%d) - sizeof(EntryHeader)(%lu) = %lu\n", dbh->free, sizeof(EntryHeader), dbh->free - sizeof(EntryHeader));
@@ -1097,6 +1137,19 @@ int main() {
 	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
 	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n\n");
+
+	btree_insert(1, 1, 3);
+	btree_insert(2, 2, 3);
+	btree_insert(3, 3, 3);
+	btree_insert(4, 4, 3);
+	btree_insert(5, 5, 3);
+	btree_dump();
+	btree_insert(6, 6, 3);
+	btree_dump();
+	btree_insert(7, 6, 3);
+	btree_dump();
+
+	return 0;
 
 	// Command Line Interface code
 	rl_attempted_completion_function = cmd_completion;
