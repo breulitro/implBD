@@ -497,12 +497,16 @@ void btree_insert_branch(short id, int pk, short menor, short maior) {
 
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
+	DBG("Branch com %d nodos\n", bth->len);
 	br = BR(bth, bth->len);
 	bth->len = bth->len + 1;
 	br->pk = pk;
 	br->menor = menor;
 	br->maior = maior;
 	b->dirty = 1;
+
+	if (bth->len > BRANCH_D * 2)
+		DBG("TBD: Branch split\n");
 }
 
 void btree_leaf_split(short id) {
@@ -539,11 +543,14 @@ void btree_leaf_split(short id) {
 	memcpy(nlf, lf, sizeof(BTLNode) * (LEAF_D + 1));
 	nbth->len = LEAF_D + 1;
 
-	// Apontamento dos simblings
+	// Apontamento dos simblings e parent
 	bth->next = newb->id;
 	nbth->prev = b->id;
+	nbth->parent = bth->parent;
 
+	DBG("Novo nodo folha(%d) criado\n", i);
 	if (!bth->parent) {
+		DBG("Alocando novo nodo raiz\n");
 		//Aloca novo nodo raiz
 		l = g_list_first(free_blocks);
 		i = (int)l->data;
@@ -560,6 +567,7 @@ void btree_leaf_split(short id) {
 		br->maior = newb->id;
 		rbth->len = 1;
 
+		newroot->dirty = 1;
 		// Apontamento dos parents
 		bth->parent = nbth->parent = i;
 		conf.root = i;
@@ -650,8 +658,10 @@ void btree_insert(int pk, short row, short id) {
 		br = BR(bth, bth->len - 1);
 		if (pk < br->pk)
 			btree_insert_node(br->menor, pk, rowid);
-		else
+		else {
+			DBG("Inserindo no maior\n");
 			btree_insert_node(br->maior, pk, rowid);
+		}
 	}
 
 #if 0
@@ -1147,6 +1157,18 @@ int main() {
 	btree_insert(6, 6, 3);
 	btree_dump();
 	btree_insert(7, 6, 3);
+	btree_dump();
+	btree_insert(8, 6, 3);
+	btree_dump();
+	btree_insert(9, 6, 3);
+	btree_dump();
+	btree_insert(10, 6, 3);
+	btree_dump();
+	btree_insert(11, 6, 3);
+	btree_dump();
+	btree_insert(12, 6, 3);
+	btree_dump();
+	btree_insert(13, 6, 3);
 	btree_dump();
 
 	return 0;
