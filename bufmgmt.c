@@ -1170,6 +1170,22 @@ char *trim(char *str) {
 	return str;
 }
 
+void _atexit() {
+	clear_history();
+
+	persist();
+
+	for (int i = 0; i < framesLen; i++) {
+		free(frames[i].datablock);
+	}
+
+	clear_history();
+
+	g_list_free(free_blocks);
+
+	printf("hit = %d, miss = %d\n", hit, miss);
+}
+
 int main() {
 	char *cmd, *hist, *aux;
 	char prompt[] = "sgbd> ";
@@ -1190,6 +1206,9 @@ int main() {
 	} else {
 		fclose(fd);
 	}
+
+	// Registra funçào de cleanup no exit
+	atexit(_atexit);
 
 	// Inicializa as estruturas de controle do programa.
 	init_database();
@@ -1241,20 +1260,6 @@ int main() {
 			add_history(hist);
 		free(hist);
 	} while (1);
-
-	clear_history();
-
-	persist();
-
-	for (int i = 0; i < framesLen; i++) {
-		free(frames[i].datablock);
-	}
-
-	clear_history();
-
-	g_list_free(free_blocks);
-
-	printf("hit = %d, miss = %d\n", hit, miss);
 
 	return 0;
 }
