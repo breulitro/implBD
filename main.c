@@ -1,3 +1,8 @@
+/*
+ * O esqueleto deste arquivo é baseado na documentação da biblioteca GNU readline.
+ * Disponível em https://cnswww.cns.cwru.edu/php/chet/readline/readline.html
+ */
+
 #include <glib.h>
 #include <stdio.h>
 #include <readline/readline.h>
