@@ -282,9 +282,6 @@ Buffer *get_insertable_datablock() {
 				if (!dbh->full)
 					dbh->free = DATABLOCK - sizeof(DBHeader);
 			DBG("db(%d)->free(%d)\n", b->id, dbh->free);
-
-			SET_USED(conf.bitmap, (int) id->data);
-			free_blocks = g_list_delete_link(free_blocks, id);
 		}
 		dbh = DBH(b->datablock);
 		DBG("db(%d)->free(%d)\n", b->id, dbh->free);
@@ -331,7 +328,7 @@ typedef struct {
 #define LEAF_D 2L
 #endif
 
-#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
+#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(short))) : (char *)(block) + sizeof(BTHeader)))
 #define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + (i) * sizeof(BTLNode))))
 void _btree_delete(int pk, int id) {
 	Buffer *b;
@@ -502,22 +499,97 @@ void btree_dump() {
 		return;
 	}
 
-	_btree_dump(conf.root, -1);
+	_btree_dump(conf.root, 0);
 }
 
 void btree_insert_branch(short id, int pk, short menor, short maior);
 
 void btree_branch_split(short id) {
+	Buffer *b, *newroot, *newb;
+	GList *l;
+	BTHeader *bth, *nbth, *rbth;
+	BTBNode *br, *nbr, *rbr;
+	int i;
+
+	DBG("Branch Split\n");
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+	b->dirty = 1;
+
+	// Aloca novo nodo branch
+	l = g_list_first(free_blocks);
+	i = (int)l->data;
+	free_blocks = g_list_delete_link(free_blocks, l);
+	SET_USED(conf.bitmap, i);
+	newb = get_datablock(i);
+
+	// Setup do novo nodo
+	newb->id = i;
+	newb->dirty = 1;
+	nbth = (BTHeader *) newb->datablock;
+	nbth->type = BRANCH;
+
+	btree_dump();
+	// Posiciona br na metade
+	br = BR(bth, BRANCH_D + 1);
+	// Posiciona nbr no começo
+	nbr = BR(nbth, 0);
+	// Copia da metade em diate do nodo $id para nbr
+	DBG("Copiando %lu bytes a partir do pk(%d)\n",
+			sizeof(short) + (sizeof(BTBNode) - sizeof(short)) * (BRANCH_D),
+			br->pk);
+	memcpy(nbr, br, sizeof(short) + (sizeof(BTBNode) - sizeof(short)) * (BRANCH_D));
+	nbth->len = BRANCH_D;
+	bth->len = BRANCH_D;
+	DBG("nbr->pk(%d)\n", nbr->pk);
+	nbr = BR(nbth, 1);
+	DBG("nbr->pk(%d)\n", nbr->pk);
+	DBG("Menores\n");
+	_btree_dump(b->id, -1);
+	DBG("Maiores\n");
+	_btree_dump(newb->id, -1);
+
+	// Apontamento dos simblings e parent
+	bth->next = newb->id;
+	nbth->prev = b->id;
+	nbth->parent = bth->parent;
+
+	DBG("Novo nodo folha(%d) criado\n", i);
+
+	// Se não tiver um nó pai, aloca, senão insere nele
+	if (!bth->parent) {
+		i = get_free_datablock_id();
+		DBG("Alocando novo nodo raiz no datablock(%d)\n", i);
+		newroot = get_datablock(i);
+		newroot->dirty = 1;
+		rbth = (BTHeader *) newroot->datablock;
+		rbth->type = BRANCH;
+		rbr = BR(rbth, 0);
+		br = BR(bth, BRANCH_D);
+		DBG("Subindo pk(%d)\n", br->pk);
+		rbr->pk = br->pk;
+		rbr->menor = b->id;
+		rbr->maior = newb->id;
+		rbth->len = 1;
+
+		newroot->dirty = 1;
+		// Apontamento dos parents
+		bth->parent = nbth->parent = i;
+		conf.root = i;
+		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
+	} else {
+		btree_insert_branch(bth->parent, nbr->pk, b->id, newb->id);
+	}
+#if 0
 	Buffer *b, *newb, *rootb;
 	BTHeader *bth, *nbth, *rbth;
 	BTBNode *br, *nbr, *rbr;
 	GList *l;
 	int i;
 
-	// Aloca novo nodo folha
+	// Aloca novo nodo branch
 	i = get_free_datablock_id();
 	newb = get_datablock(i);
-	newb->id = i;
 	newb->dirty = 1;
 	nbth = (BTHeader *) newb->datablock;
 	nbth->type = BRANCH;
@@ -527,7 +599,7 @@ void btree_branch_split(short id) {
 	bth = (BTHeader *) b->datablock;
 
 	// Aponta os nodos para fazer a cópia dos dados
-	br = BR(bth, BRANCH_D + 1);
+	br = BR(bth, BRANCH_D);
 	nbr = BR(nbth, 0);
 
 	memcpy(nbr, br, sizeof(BTBNode) * BRANCH_D);
@@ -542,18 +614,27 @@ void btree_branch_split(short id) {
 	// Aponta para o nodo que vai subir pra raiz (ou branch)
 	br = BR(bth, BRANCH_D);
 	if (!bth->parent) {
+		DBG("Alocando novo nodo raiz\n");
 		// Cria novo nodo raiz
 		i = get_free_datablock_id();
 		rootb = get_datablock(i);
-		rootb->id = i;
+		rootb->dirty = 1;
 		// TODO: Acabar de alocar a nova raiz
 		rbth = (BTHeader *) rootb->datablock;
+		rbth->type = BRANCH;
 		rbr = BR(rbth, 0);
-		rbth->len = rbth->len + 1;
+		rbth->len = 1;
+		rbr->pk = br->pk;
+		rbr->menor = b->id;
+		rbr->maior = newb->id;
+		DBG("Apontando raiz para datablock(%d)\n", rootb->id);
+		conf.root = rootb->id;
+		bth->parent = nbth->parent = conf.root;
 	} else {
 		// Adiciona no parent
 		btree_insert_branch(bth->parent, br->pk, b->id, newb->id);
 	}
+#endif
 }
 
 void btree_insert_branch(short id, int pk, short menor, short maior) {
@@ -573,7 +654,7 @@ void btree_insert_branch(short id, int pk, short menor, short maior) {
 
 	if (bth->len > BRANCH_D * 2) {
 		DBG("TBD: Branch split\n");
-		//btree_branch_split(id);
+		btree_branch_split(id);
 	}
 }
 
@@ -610,6 +691,7 @@ void btree_leaf_split(short id) {
 	// Copia da metade em diate do nodo $id para nlf
 	memcpy(nlf, lf, sizeof(BTLNode) * (LEAF_D + 1));
 	nbth->len = LEAF_D + 1;
+	bth->len = LEAF_D;
 
 	// Apontamento dos simblings e parent
 	bth->next = newb->id;
@@ -640,9 +722,6 @@ void btree_leaf_split(short id) {
 	} else {
 		btree_insert_branch(bth->parent, nlf->pk, b->id, newb->id);
 	}
-
-
-	bth->len = LEAF_D;
 	//conf.root = newroot->id;
 }
 
