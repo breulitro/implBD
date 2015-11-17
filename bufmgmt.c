@@ -471,7 +471,7 @@ void _btree_dump(short id, int padding) {
 	bth = (BTHeader *) b->datablock;
 
 	if (bth->type == LEAF)
-		btree_dump_leaf(b->id, padding + 1);
+		btree_dump_leaf(b->id, padding);
 	else {
 		for (i = 0; i < bth->len; i++) {
 			br = BR(bth, i);
