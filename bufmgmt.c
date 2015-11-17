@@ -355,6 +355,7 @@ void _btree_delete(int pk, int id) {
 		}
 	} else {
 		printf("TBD\n");
+		// TODO: Buscar nodo e deletar o pk dele
 		return;
 		for (int i = 0; i < bth->len; i++) {
 			;
@@ -580,61 +581,6 @@ void btree_branch_split(short id) {
 	} else {
 		btree_insert_branch(bth->parent, nbr->pk, b->id, newb->id);
 	}
-#if 0
-	Buffer *b, *newb, *rootb;
-	BTHeader *bth, *nbth, *rbth;
-	BTBNode *br, *nbr, *rbr;
-	GList *l;
-	int i;
-
-	// Aloca novo nodo branch
-	i = get_free_datablock_id();
-	newb = get_datablock(i);
-	newb->dirty = 1;
-	nbth = (BTHeader *) newb->datablock;
-	nbth->type = BRANCH;
-
-	// Carrega datablock aonde será feito o split
-	b = get_datablock(id);
-	bth = (BTHeader *) b->datablock;
-
-	// Aponta os nodos para fazer a cópia dos dados
-	br = BR(bth, BRANCH_D);
-	nbr = BR(nbth, 0);
-
-	memcpy(nbr, br, sizeof(BTBNode) * BRANCH_D);
-	bth->len = BRANCH_D;
-	nbth->len = BRANCH_D;
-
-	// Faz os apontamentos dos siblings e do parent
-	nbth->prev = b->id;
-	bth->next = newb->id;
-	nbth->parent = bth->parent;
-
-	// Aponta para o nodo que vai subir pra raiz (ou branch)
-	br = BR(bth, BRANCH_D);
-	if (!bth->parent) {
-		DBG("Alocando novo nodo raiz\n");
-		// Cria novo nodo raiz
-		i = get_free_datablock_id();
-		rootb = get_datablock(i);
-		rootb->dirty = 1;
-		// TODO: Acabar de alocar a nova raiz
-		rbth = (BTHeader *) rootb->datablock;
-		rbth->type = BRANCH;
-		rbr = BR(rbth, 0);
-		rbth->len = 1;
-		rbr->pk = br->pk;
-		rbr->menor = b->id;
-		rbr->maior = newb->id;
-		DBG("Apontando raiz para datablock(%d)\n", rootb->id);
-		conf.root = rootb->id;
-		bth->parent = nbth->parent = conf.root;
-	} else {
-		// Adiciona no parent
-		btree_insert_branch(bth->parent, br->pk, b->id, newb->id);
-	}
-#endif
 }
 
 void btree_insert_branch(short id, int pk, short menor, short maior) {
@@ -1289,7 +1235,7 @@ int main() {
 	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
 	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n\n");
-
+#if 0
 	btree_insert(1, 1, 3);
 	btree_insert(2, 2, 3);
 	btree_insert(3, 3, 3);
@@ -1314,8 +1260,8 @@ int main() {
 	btree_insert(13, 6, 3);
 	DBG("######################\n");
 	btree_dump();
-
 	return 0;
+#endif
 
 	// Command Line Interface code
 	rl_attempted_completion_function = cmd_completion;
