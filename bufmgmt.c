@@ -353,14 +353,19 @@ void _btree_delete(int pk, int id) {
 				return;
 			}
 		}
+
+		printf("pk(%d) não encontrada na btree\n", pk);
 	} else {
-		printf("TBD\n");
 		// TODO: Buscar nodo e deletar o pk dele
-		return;
 		for (int i = 0; i < bth->len; i++) {
-			;
+			br = BR(bth, i);
+			if (pk < br->pk)
+				_btree_delete(pk, br->menor);
+			else
+				_btree_delete(pk, br->maior);
 		}
 	}
+
 	// Se é igual, é pq é o último
 	printf("btree->len = %d\n", bth->len);
 }
