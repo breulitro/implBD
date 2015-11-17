@@ -11,15 +11,15 @@
 //#include <sys/stat.h>
 //#include <fcntl.h>
 
-#define FILESIZE 268435456 // 256 * 1024 * 1024
+#define FILESIZE 256 * 1024 * 1024 // 256MB
 #define DATABLOCK 4096
 #define DATAFILE ".datafile"
 
 #define IS_USED(bmap, n) (bmap[n / 8] & (1 << (n % 8)))
 #define SET_USED(bmap, n) bmap[(n) / 8] |= (1 << ((n) % 8))
 
-#define DBH(buf) ((DBHeader *) (((char *)&(buf)[DATABLOCK - 1]) - sizeof(DBHeader)));
-#define EH(dbh, n) ((EntryHeader *) ((char *)(dbh) - sizeof(EntryHeader) * (n)))
+#define TBH(buf) ((TBHeader *) (((char *)&(buf)[DATABLOCK - 1]) - sizeof(TBHeader)));
+#define RH(tbh, n) ((EntryHeader *) ((char *)(tbh) - sizeof(EntryHeader) * (n)))
 
 #ifdef DEBUG
 #define DBG(fmt, ...) printf("%s() @ %s +%d: "fmt, __func__, __FILE__, __LINE__, ##__VA_ARGS__)
@@ -28,42 +28,42 @@
 #endif
 
 typedef struct Buffer {
-	int id;
+	uint16_t id;
 	char *datablock;
 	char dirty;
 	char used;
 } Buffer;
 
 typedef struct {
-	int header_len;
-	int free;
-	int full;
-	int next_init;
-	int next;
-} DBHeader;
+	uint16_t header_len;
+	uint16_t free;
+	uint16_t full;
+	uint16_t next_init;
+	uint16_t next;
+} TBHeader;
 
 typedef struct {
 	unsigned char bitmap[FILESIZE / DATABLOCK / 8];
-	int root;
-	int table;
-	int nextpk;
+	uint16_t root;
+	uint16_t table;
+	uint16_t nextpk;
 } Config;
 
 
 typedef struct {
-	short row;
-	short id;
+	uint16_t row;
+	uint16_t id;
 } RowId;
 
-Buffer frames[256];
-int framesLen = 0;
-int vitima = 0;
-int miss = 0;
-int hit = 0;
-GList *free_blocks = NULL;
+static Buffer frames[256];
+static uint16_t framesLen;
+static uint32_t vitima;
+static uint32_t miss;
+static uint32_t hit = 0;
+static GList *free_blocks;
 
-Buffer *get_datablock(int id) {
-	int i;
+Buffer *get_datablock(uint16_t id) {
+	uint16_t i;
 	FILE *fd;
 
 	DBG("%s(%d)\n", __func__, id);
@@ -145,7 +145,7 @@ Buffer *get_datablock(int id) {
 Config conf;
 
 void persist() {
-	int i;
+	uint16_t i;
 	FILE *fd = fopen(DATAFILE, "r+");
 	assert(fd);
 
@@ -212,15 +212,15 @@ void init_database() {
 }
 
 typedef struct {
-	int pk;
-	short init;
-	short offset;
+	uint32_t pk;
+	uint16_t init;
+	uint16_t offset;
 	RowId next;
 } EntryHeader;
 
-short get_free_datablock_id() {
+uint16_t get_free_datablock_id() {
 	GList *l;
-	short i;
+	uint16_t i;
 	// Pega o id do primeiro datablock livre da lista de datablocks livres
 	l = g_list_first(free_blocks);
 	if (!l) {
@@ -239,7 +239,7 @@ short get_free_datablock_id() {
 
 Buffer *get_insertable_datablock() {
 	Buffer *b;
-	DBHeader *dbh;
+	TBHeader *tbh;
 	GList *id;
 
 	// Caso ainda não haja um datablock inicial para a tabela, aloca o primeiro
@@ -253,43 +253,43 @@ Buffer *get_insertable_datablock() {
 	}
 
 	b = get_datablock(conf.table);
-	dbh = DBH(b->datablock);
+	tbh = TBH(b->datablock);
 
-	if (!dbh->free)
-		if (!dbh->full)
-			dbh->free = DATABLOCK - sizeof(DBHeader);
+	if (!tbh->free)
+		if (!tbh->full)
+			tbh->free = DATABLOCK - sizeof(TBHeader);
 
-	DBG("To te pegando um datablock com %d bytes livres\n", dbh->free);
+	DBG("To te pegando um datablock com %d bytes livres\n", tbh->free);
 
-	DBG("db(%d)->free(%d)\n", b->id, dbh->free);
-	while (dbh->free <  sizeof(EntryHeader)) {
+	DBG("db(%d)->free(%d)\n", b->id, tbh->free);
+	while (tbh->free <  sizeof(EntryHeader)) {
 		printf("entrou no while\n");
 		sleep(1);
-		DBG("dbh->free(%d) < sizeof(EntryHeader)(%lu)\n", dbh->free, sizeof(EntryHeader));
-		DBG("next(%d)\n", dbh->next);
-		if (dbh->next) {
+		DBG("tbh->free(%d) < sizeof(EntryHeader)(%lu)\n", tbh->free, sizeof(EntryHeader));
+		DBG("next(%d)\n", tbh->next);
+		if (tbh->next) {
 			DBG("Ja existe proximo datablock\n");
-			b = get_datablock(dbh->next);
+			b = get_datablock(tbh->next);
 		} else {
 			DBG("Nao existe proximo datablock\n");
 
 			b->dirty = 1;
-			dbh->next = get_free_datablock_id();
-			b = get_datablock(dbh->next);
+			tbh->next = get_free_datablock_id();
+			b = get_datablock(tbh->next);
 
-			dbh = DBH(b->datablock);
-			if (!dbh->free) 
-				if (!dbh->full)
-					dbh->free = DATABLOCK - sizeof(DBHeader);
-			DBG("db(%d)->free(%d)\n", b->id, dbh->free);
+			tbh = TBH(b->datablock);
+			if (!tbh->free) 
+				if (!tbh->full)
+					tbh->free = DATABLOCK - sizeof(TBHeader);
+			DBG("db(%d)->free(%d)\n", b->id, tbh->free);
 
 			SET_USED(conf.bitmap, (int) id->data);
 			free_blocks = g_list_delete_link(free_blocks, id);
 		}
-		dbh = DBH(b->datablock);
-		DBG("db(%d)->free(%d)\n", b->id, dbh->free);
+		tbh = TBH(b->datablock);
+		DBG("db(%d)->free(%d)\n", b->id, tbh->free);
 	}
-	DBG("db(%d)->free(%d)\n", b->id, dbh->free);
+	DBG("db(%d)->free(%d)\n", b->id, tbh->free);
 
 	return b;
 }
@@ -300,10 +300,10 @@ typedef enum {
 } BTType;
 
 typedef struct {
-	short len;
-	short prev;
-	short next;
-	short parent;
+	uint16_t len;
+	uint16_t prev;
+	uint16_t next;
+	uint16_t parent;
 	BTType type;
 } BTHeader;
 
@@ -311,19 +311,19 @@ typedef struct {
 // prev e no next pra estrutura ficar uniforme. Isso deixa a estrutura com 12 bytes.
 // E não é isso que a gente quer, queremos ela com seus 8 bytes enxutos!
 typedef struct {
-	short menor;
-	int pk;
-	short maior;
+	uint16_t menor;
+	uint32_t pk;
+	uint16_t maior;
 } __attribute__((__packed__)) BTBNode;
 
 typedef struct {
-	int pk;
+	uint32_t pk;
 	RowId rowid;
 } BTLNode;
 
 #if 0
 // Desconta o Header da BTree + 1 Nodo para permitir a inserção do 2d+1-ésimo elemento
-#define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(short))) / 2)
+#define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(uint16_t))) / 2)
 #define LEAF_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTLNode)) / sizeof(BTLNode)) / 2)
 #else
 // Para propósito de testes, até estabilizar a BTree+
@@ -331,9 +331,9 @@ typedef struct {
 #define LEAF_D 2L
 #endif
 
-#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(short)) + sizeof(short)) : (char *)(block) + sizeof(BTHeader)))
+#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(uint16_t)) + sizeof(uint16_t)) : (char *)(block) + sizeof(BTHeader)))
 #define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + (i) * sizeof(BTLNode))))
-void _btree_delete(int pk, int id) {
+void _btree_delete(uint32_t pk, uint16_t id) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
@@ -371,11 +371,11 @@ void btree_delete(int pk) {
 	_btree_delete(pk, conf.root);
 }
 
-RowId btree_leaf_get(short id, int pk) {
+RowId btree_leaf_get(uint16_t id, uint32_t pk) {
 	Buffer *b;
 	BTHeader *bth;
 	BTLNode *lf;
-	int i;
+	uint16_t i;
 
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
@@ -390,11 +390,11 @@ RowId btree_leaf_get(short id, int pk) {
 	return (RowId){0,0};
 }
 
-RowId btree_branch_get(short id, int pk) {
+RowId btree_branch_get(uint16_t id, uint32_t pk) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
-	int i;
+	uint16_t i;
 
 	printf("Search na branch\n");
 	b = get_datablock(conf.root);
@@ -425,7 +425,7 @@ RowId btree_branch_get(short id, int pk) {
 	return (RowId){0,0};
 }
 
-RowId btree_get(int pk) {
+RowId btree_get(uint32_t pk) {
 	Buffer *b;
 	BTHeader *bth;
 
@@ -440,13 +440,14 @@ RowId btree_get(int pk) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
-void btree_dump_leaf(short id, int padding) {
+void btree_dump_leaf(uint16_t id, uint8_t padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
-	int i, p;
+	uint16_t i;
+	uint8_t p;
 
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
@@ -462,13 +463,14 @@ void btree_dump_leaf(short id, int padding) {
 	printf("\n");
 }
 
-void _btree_dump(short id, int padding) {
+void _btree_dump(uint16_t id, uint8_t padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
-	int i, p;
+	uint16_t i;
+	uint8_t p;
 
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
@@ -490,13 +492,6 @@ void _btree_dump(short id, int padding) {
 }
 
 void btree_dump() {
-	Buffer *b, *newroot, *newb;
-	GList *l;
-	BTHeader *bth;
-	BTBNode *br;
-	BTLNode *lf;
-	int i;
-
 	if (!conf.root) {
 		printf("Btree+ vazia\n");
 		return;
@@ -505,9 +500,9 @@ void btree_dump() {
 	_btree_dump(conf.root, -1);
 }
 
-void btree_insert_branch(short id, int pk, short menor, short maior);
+void btree_insert_branch(uint16_t id, uint32_t pk, uint16_t menor, uint16_t maior);
 
-void btree_branch_split(short id) {
+void btree_branch_split(uint16_t id) {
 	Buffer *b, *newb, *rootb;
 	BTHeader *bth, *nbth, *rbth;
 	BTBNode *br, *nbr, *rbr;
@@ -550,7 +545,7 @@ void btree_branch_split(short id) {
 	}
 }
 
-void btree_insert_branch(short id, int pk, short menor, short maior) {
+void btree_insert_branch(uint16_t id, uint32_t pk, uint16_t menor, uint16_t maior) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
@@ -571,13 +566,13 @@ void btree_insert_branch(short id, int pk, short menor, short maior) {
 	}
 }
 
-void btree_leaf_split(short id) {
+void btree_leaf_split(uint16_t id) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth, *nbth, *rbth;
 	BTBNode *br;
 	BTLNode *lf, *nlf;
-	int i;
+	uint16_t i;
 
 	printf("Leaf Split\n");
 	b = get_datablock(id);
@@ -586,7 +581,7 @@ void btree_leaf_split(short id) {
 
 	// Aloca novo nodo folha
 	l = g_list_first(free_blocks);
-	i = (int)l->data;
+	i = (uint16_t)l->data;
 	free_blocks = g_list_delete_link(free_blocks, l);
 	SET_USED(conf.bitmap, i);
 	newb = get_datablock(i);
@@ -639,13 +634,12 @@ void btree_leaf_split(short id) {
 	//conf.root = newroot->id;
 }
 
-void btree_insert_node(short id, int pk, RowId rowid) {
+void btree_insert_node(uint16_t id, uint32_t pk, RowId rowid) {
 	Buffer *b;
 	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
-	int i;
 
 	printf("Inserindo btree no datablock(%d)\n", id);
 	b = get_datablock(id);
@@ -675,14 +669,13 @@ void btree_insert_node(short id, int pk, RowId rowid) {
 	}
 }
 
-void btree_insert(int pk, short row, short id) {
+void btree_insert(uint32_t pk, uint16_t row, uint16_t id) {
 	Buffer *b;
 	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
 	RowId rowid;
-	int i;
 #pragma GCC diagnostic pop
 
 	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
@@ -772,11 +765,11 @@ void btree_insert(int pk, short row, short id) {
 }
 
 RowId insert(char *json, char chained) {
-	int len;
+	uint32_t len;
 	RowId rowid;
 	Buffer *b;
-	DBHeader *dbh;
-	EntryHeader *eh;
+	TBHeader *tbh;
+	EntryHeader *rh;
 
 	b = get_insertable_datablock();
 	if (!b) {
@@ -784,95 +777,95 @@ RowId insert(char *json, char chained) {
 		return (RowId){0,0};
 	}
 
-	dbh = DBH(b->datablock);
-	DBG("insertable datablock with %d bytes, json with %lu\n bytes", dbh->free, strlen(json));
+	tbh = TBH(b->datablock);
+	DBG("insertable datablock with %d bytes, json with %lu\n bytes", tbh->free, strlen(json));
 
 	DBG("Chegando pra inserir: %s\n", json);
 	len = strlen(json);
 	DBG("len = %d\n", len);
-	dbh = DBH(b->datablock);
-	dbh->header_len++;
-	DBG("dbh->free(%d) - sizeof(EntryHeader)(%lu) = %lu\n", dbh->free, sizeof(EntryHeader), dbh->free - sizeof(EntryHeader));
-	dbh->free = dbh->free - sizeof(EntryHeader);
-	DBG("dbh->free(%d)\n", dbh->free);
-	eh = EH(dbh, dbh->header_len);
-	eh->init = dbh->next_init;
-	DBG("init = %d\n", eh->init);
+	tbh = TBH(b->datablock);
+	tbh->header_len++;
+	DBG("tbh->free(%d) - sizeof(EntryHeader)(%lu) = %lu\n", tbh->free, sizeof(EntryHeader), tbh->free - sizeof(EntryHeader));
+	tbh->free = tbh->free - sizeof(EntryHeader);
+	DBG("tbh->free(%d)\n", tbh->free);
+	rh = RH(tbh, tbh->header_len);
+	rh->init = tbh->next_init;
+	DBG("init = %d\n", rh->init);
 	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
-			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
+			tbh->free, rh->offset, sizeof(EntryHeader), tbh->free - rh->offset - sizeof(EntryHeader));
 	// Se for um chained, seta a pk pra zero
-	eh->pk = chained ? 0 : conf.nextpk++;
-	DBG("pk = %d\n", eh->pk);
+	rh->pk = chained ? 0 : conf.nextpk++;
+	DBG("pk = %d\n", rh->pk);
 
 	// A partir deste ponto, len passa a ser uma flag pra sinalizar se
 	// o json coube inteiro neste datablock
 	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
-			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
-	if (len > dbh->free) {
+			tbh->free, rh->offset, sizeof(EntryHeader), tbh->free - rh->offset - sizeof(EntryHeader));
+	if (len > tbh->free) {
 		DBG("Vai encadear\n");
-		eh->offset = dbh->free - 1; //FIXME: Ta errado botar esse -1...
-		dbh->free = dbh->free - 1;
+		rh->offset = tbh->free - 1; //FIXME: Ta errado botar esse -1...
+		tbh->free = tbh->free - 1;
 		len = 1;
-		dbh->full = 1;
+		tbh->full = 1;
 	} else {
 		DBG("NÃO Vai encadear\n");
-		eh->offset = len;
+		rh->offset = len;
 		len = 0;
 	}
-	//dbh->next_init += eh->offset;
-	dbh->next_init = dbh->next_init + eh->offset;
+	//tbh->next_init += rh->offset;
+	tbh->next_init = tbh->next_init + rh->offset;
 
 	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
-			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
+			tbh->free, rh->offset, sizeof(EntryHeader), tbh->free - rh->offset - sizeof(EntryHeader));
 
-	DBG("copiando para a posição %ld do buffer\n", &b->datablock[eh->init] - b->datablock);
-	DBG("writing %d bytes @ %d\n", eh->offset, eh->init);
-	DBG("antes pk = %d\n", eh->pk);
-	DBG("pk @ %ld\n", (char *)&eh->pk - b->datablock);
-	DBG("eh @ %ld\n", (char *)eh - b->datablock);
-	memcpy(&b->datablock[eh->init], json, eh->offset);
-	DBG("depois pk = %d\n", eh->pk);
+	DBG("copiando para a posição %ld do buffer\n", &b->datablock[rh->init] - b->datablock);
+	DBG("writing %d bytes @ %d\n", rh->offset, rh->init);
+	DBG("antes pk = %d\n", rh->pk);
+	DBG("pk @ %ld\n", (char *)&rh->pk - b->datablock);
+	DBG("rh @ %ld\n", (char *)rh - b->datablock);
+	memcpy(&b->datablock[rh->init], json, rh->offset);
+	DBG("depois pk = %d\n", rh->pk);
 
-	//dbh->free -= eh->offset - sizeof(EntryHeader);
-	DBG("free(%d) - offset(%d) = %d\n", dbh->free, eh->offset, dbh->free - eh->offset);
-	dbh->free = dbh->free - eh->offset;
-	if (dbh->free == 0)
-		dbh->full = 1;
-	DBG("free(%d)\n", dbh->free);
+	//tbh->free -= rh->offset - sizeof(EntryHeader);
+	DBG("free(%d) - offset(%d) = %d\n", tbh->free, rh->offset, tbh->free - rh->offset);
+	tbh->free = tbh->free - rh->offset;
+	if (tbh->free == 0)
+		tbh->full = 1;
+	DBG("free(%d)\n", tbh->free);
 
 	if (len) {
 		DBG("Encadeando\n");
-		DBG("antes pk = %d\n", eh->pk);
-		rowid = insert(&json[eh->offset], 1);
-		DBG("depois pk = %d\n", eh->pk);
+		DBG("antes pk = %d\n", rh->pk);
+		rowid = insert(&json[rh->offset], 1);
+		DBG("depois pk = %d\n", rh->pk);
 		DBG("ChainedRow @ %d:%d\n", rowid.id, rowid.row);
 		if ( *(int *) &rowid == 0L) {
 			DBG("Não consegui encadear, desfazendo operação\n");
 			// Roll-back, desfaz o insert que não coube nos datablocks disponíveis
-			dbh->header_len--;
+			tbh->header_len--;
 			return rowid;
 		}
-		eh->next = rowid;
+		rh->next = rowid;
 	} else {
-		eh->next = (RowId){0,0};
+		rh->next = (RowId){0,0};
 	}
 
 	b->dirty = 1;
 	// Se não for um chained row, insere ele na lista
-	if (eh->pk)
-		btree_insert(eh->pk, dbh->header_len, b->id);
+	if (rh->pk)
+		btree_insert(rh->pk, tbh->header_len, b->id);
 
-	DBG("Row(%d) @ %d:%d\n", eh->pk, b->id, dbh->header_len);
-	return (RowId){dbh->header_len, b->id};
+	DBG("Row(%d) @ %d:%d\n", rh->pk, b->id, tbh->header_len);
+	return (RowId){tbh->header_len, b->id};
 }
 
 void insert_cmd(char *params) {
 	// "params" deve conter o json a ser inserido
 	// NÃO É FEITA VALIDAÇÃO DO DOCUMENTO JSON!
-	int len;
+	uint32_t len;
 	Buffer *b;
-	DBHeader *dbh;
-	EntryHeader *eh;
+	TBHeader *tbh;
+	EntryHeader *rh;
 	RowId rowid;
 
 	if (!params) {
@@ -890,33 +883,33 @@ void insert_cmd(char *params) {
 	printf("inserted @ RowId(%d:%d)\n", rowid.id, rowid.row);
 }
 
-void _select(RowId rowid, char **buf, int len) {
+void _select(RowId rowid, char **buf, uint16_t len) {
 	Buffer *b;
-	DBHeader *dbh;
-	EntryHeader *eh;
+	TBHeader *tbh;
+	EntryHeader *rh;
 	char *baux;
 
 	b = get_datablock(rowid.id);
-	dbh = DBH(b->datablock);
-	eh = EH(dbh, rowid.row);
-	baux = malloc(eh->offset + 1);
-	memcpy(baux, &b->datablock[eh->init], eh->offset);
-	baux[eh->offset] = 0;
+	tbh = TBH(b->datablock);
+	rh = RH(tbh, rowid.row);
+	baux = malloc(rh->offset + 1);
+	memcpy(baux, &b->datablock[rh->init], rh->offset);
+	baux[rh->offset] = 0;
 	*buf = strcat(*buf, baux);
 	DBG("buf = %s\n", *buf);
-	if (*(int *)&eh->next) {
+	if (*(int *)&rh->next) {
 		DBG("select denovo\n");
-		_select(eh->next, buf, len + eh->offset);
+		_select(rh->next, buf, len + rh->offset);
 	}
 }
 
 // WARN: Não é feita verificação se existe realmente o RowId em questão
 void select_cmd(char *params) {
-	int pk;
+	uint32_t pk;
 	Buffer *b;
 	char *buf, *baux;
-	DBHeader *dbh;
-	EntryHeader *eh;
+	TBHeader *tbh;
+	EntryHeader *rh;
 	RowId r;
 
 	if(!params) {
@@ -932,29 +925,29 @@ void select_cmd(char *params) {
 	}
 
 	b = get_datablock(r.id);
-	dbh = DBH(b->datablock);
-	eh = EH(dbh, r.row);
+	tbh = TBH(b->datablock);
+	rh = RH(tbh, r.row);
 
-	if (!eh->pk) {
+	if (!rh->pk) {
 		printf("Documento não encontrado\n");
 		return;
 	}
 
-	buf = malloc(eh->offset + 1);
-	memcpy(buf, &b->datablock[eh->init], eh->offset);
-	buf[eh->offset] = 0;
+	buf = malloc(rh->offset + 1);
+	memcpy(buf, &b->datablock[rh->init], rh->offset);
+	buf[rh->offset] = 0;
 
 	printf("primeiro copy feito\n");
-	if (*(int *)&eh->next != 0)
-		_select(eh->next, &buf, eh->offset);
+	if (*(int *)&rh->next != 0)
+		_select(rh->next, &buf, rh->offset);
 
 
-	printf("%d | %s\n", eh->pk, buf);
+	printf("%d | %s\n", rh->pk, buf);
 	free(buf);
 }
 
 typedef struct {
-	int pk;
+	uint32_t pk;
 	char *json;
 } TableEntry;
 
@@ -967,34 +960,34 @@ void free_table_entry(gpointer data) {
 
 void search_cmd(char *params) {
 	Buffer *b;
-	DBHeader *dbh;
-	EntryHeader *eh;
+	TBHeader *tbh;
+	EntryHeader *rh;
 	TableEntry *te;
 	GList *x, *l = NULL;
-	short i;
+	uint16_t i;
 
 	b = get_datablock(conf.table);
 	do {
-		dbh = DBH(b->datablock);
-		for (i = 1; i <= dbh->header_len; i++) {
-			eh = EH(dbh, i);
+		tbh = TBH(b->datablock);
+		for (i = 1; i <= tbh->header_len; i++) {
+			rh = RH(tbh, i);
 
 			//Caso o documento tenha sido deletado, ignora a EntryHeader
-			if (!eh->pk)
+			if (!rh->pk)
 				continue;
 
-			if (g_strstr_len(&b->datablock[eh->init], eh->offset, params)) {
+			if (g_strstr_len(&b->datablock[rh->init], rh->offset, params)) {
 				te = malloc(sizeof(TableEntry));
-				te->json = malloc(eh->offset + 1);
-				te->json = memcpy(te->json, &b->datablock[eh->init], eh->offset);
-				te->json[eh->offset] = 0;
-				te->pk = eh->pk;
+				te->json = malloc(rh->offset + 1);
+				te->json = memcpy(te->json, &b->datablock[rh->init], rh->offset);
+				te->json[rh->offset] = 0;
+				te->pk = rh->pk;
 				l = g_list_append(l, te);
 			}
 		}
 
-		if (dbh->next)
-			b = get_datablock(dbh->next);
+		if (tbh->next)
+			b = get_datablock(tbh->next);
 		else
 			b = NULL;
 
@@ -1010,34 +1003,34 @@ void search_cmd(char *params) {
 	g_list_free_full(l, free_table_entry);
 }
 
-void delete(char *datablock, short row) {
+void delete(char *datablock, uint16_t row) {
 	Buffer *b;
-	DBHeader *dbh;
-	EntryHeader *eh, *ehaux;
+	TBHeader *tbh;
+	EntryHeader *rh, *rhaux;
 
-	dbh = DBH(datablock);
-	eh = EH(dbh, row);
+	tbh = TBH(datablock);
+	rh = RH(tbh, row);
 
 	// Como não da pra mudar o RowId, o datablock fica com um EntryHeader queimado
-	eh->pk = 0; // pk começa em 1, 0 indica que o EntryHeader é inválido
-	if (row < dbh->header_len) {
+	rh->pk = 0; // pk começa em 1, 0 indica que o EntryHeader é inválido
+	if (row < tbh->header_len) {
 		// Caso não seja o último row do datablock, desfragmentamos
-		ehaux = EH(dbh, row + 1);
-		memcpy(&datablock[eh->init], &datablock[ehaux->init], dbh->next_init - ehaux->init);
-		ehaux->init = eh->init;
-		// ehaux->offset continua o mesmo
+		rhaux = RH(tbh, row + 1);
+		memcpy(&datablock[rh->init], &datablock[rhaux->init], tbh->next_init - rhaux->init);
+		rhaux->init = rh->init;
+		// rhaux->offset continua o mesmo
 	}
 
-	if (*(int *)&eh->next != 0) {
-		b = get_datablock(eh->next.id);
-		delete(b->datablock, eh->next.row);
+	if (*(uint16_t *)&rh->next != 0) {
+		b = get_datablock(rh->next.id);
+		delete(b->datablock, rh->next.row);
 		b->dirty = 1;
 	}
 }
 
 void delete_cmd(char *params) {
 	Buffer *b;
-	int pk;
+	uint32_t pk;
 	RowId r;
 
 	if (!params || strlen(params) == 0) {
