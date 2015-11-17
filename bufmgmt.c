@@ -243,7 +243,7 @@ Buffer *get_insertable_datablock() {
 }
 
 
-RowId insert(char *json, char chained) {
+RowId insert(char *json, char chained, int pk) {
 	int len;
 	RowId rowid;
 	Buffer *b;
@@ -269,7 +269,7 @@ RowId insert(char *json, char chained) {
 	eh->init = dbh->next_init;
 	DBG("init = %d\n", eh->init);
 	// Se for um chained, seta a pk pra zero
-	eh->pk = chained ? 0 : conf.nextpk++;
+	eh->pk = chained ? 0 : pk ? pk : conf.nextpk++;
 	DBG("pk = %d\n", eh->pk);
 
 	// A partir deste ponto, len passa a ser uma flag pra sinalizar se
@@ -308,7 +308,7 @@ RowId insert(char *json, char chained) {
 	if (len) {
 		DBG("Encadeando\n");
 		DBG("antes pk = %d\n", eh->pk);
-		rowid = insert(&json[eh->offset], 1);
+		rowid = insert(&json[eh->offset], 1, 0);
 		DBG("depois pk = %d\n", eh->pk);
 		DBG("ChainedRow @ %d:%d\n", rowid.id, rowid.row);
 		if ( *(int *) &rowid == 0L) {
@@ -331,6 +331,12 @@ RowId insert(char *json, char chained) {
 	return (RowId){dbh->header_len, b->id};
 }
 
+void insert_with_id(int pk, char *json) {
+	RowId rowid;
+	rowid = insert(json, 0, pk);
+	printf("inserted @ RowId(%d:%d)\n", rowid.id, rowid.row);
+}
+
 void insert_cmd(char *params) {
 	// "params" deve conter o json a ser inserido
 	// NÃO É FEITA VALIDAÇÃO DO DOCUMENTO JSON!
@@ -351,7 +357,7 @@ void insert_cmd(char *params) {
 		return;
 	}
 
-	rowid = insert(params, 0);
+	rowid = insert(params, 0, 0);
 	printf("inserted @ RowId(%d:%d)\n", rowid.id, rowid.row);
 }
 
@@ -602,4 +608,6 @@ void update_cmd(char *params) {
 	}
 
 	printf("id = %s, json = %s\n", cid, json);
+	delete_cmd(cid);
+	insert_with_id(atoi(cid), json);
 }
