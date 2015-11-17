@@ -983,6 +983,39 @@ void select_cmd(char *params) {
 	free(buf);
 }
 
+char *get_entry(int pk) {
+	Buffer *b;
+	char *buf, *baux;
+	DBHeader *dbh;
+	EntryHeader *eh;
+	RowId r;
+
+	r = btree_get(pk);
+	if (!r.id && !r.row) {
+		printf("Arquivo não existe\n");
+		return NULL;
+	}
+
+	b = get_datablock(r.id);
+	dbh = DBH(b->datablock);
+	eh = EH(dbh, r.row);
+
+	if (!eh->pk) {
+		printf("Documento não encontrado\n");
+		return NULL;
+	}
+
+	buf = malloc(eh->offset + 1);
+	memcpy(buf, &b->datablock[eh->init], eh->offset);
+	buf[eh->offset] = 0;
+
+	printf("primeiro copy feito\n");
+	if (*(int *)&eh->next != 0)
+		_select(eh->next, &buf, eh->offset);
+
+
+	return buf;
+}
 typedef struct {
 	int pk;
 	char *json;
@@ -1002,6 +1035,7 @@ void search_cmd(char *params) {
 	TableEntry *te;
 	GList *x, *l = NULL;
 	short i;
+	char *json;
 
 	b = get_datablock(conf.table);
 	do {
@@ -1013,14 +1047,17 @@ void search_cmd(char *params) {
 			if (!eh->pk)
 				continue;
 
-			if (g_strstr_len(&b->datablock[eh->init], eh->offset, params)) {
+			json = get_entry(eh->pk);
+			if (!json)
+				continue;
+
+			if (strstr(json, params)) {
 				te = malloc(sizeof(TableEntry));
-				te->json = malloc(eh->offset + 1);
-				te->json = memcpy(te->json, &b->datablock[eh->init], eh->offset);
-				te->json[eh->offset] = 0;
+				te->json = json;
 				te->pk = eh->pk;
 				l = g_list_append(l, te);
-			}
+			} else
+				g_free(json);
 		}
 
 		if (dbh->next)
