@@ -486,3 +486,35 @@ void btree_insert(int pk, uint16_t row, uint16_t id) {
 	}
 #endif
 }
+
+void _btree_update(int id, int pk, RowId rowid) {
+	Buffer *b;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+
+	if (bth->type == LEAF)
+		for(int i = 0; i < bth->len; i++) {
+			lf = LF(bth, i);
+			if (lf->pk == pk) {
+				DBG("Updating %d @ %d:%d -> %d:%d\n", pk, lf->rowid.id, lf->rowid.row, rowid.id, rowid.row);
+				lf->rowid = rowid;
+				break;
+			}
+		}
+	else
+		for(int i = 0; i < bth->len; i++) {
+			br = BR(bth, i);
+			if (pk < br->pk)
+				return _btree_update(br->menor, pk, rowid);
+			else
+				return _btree_update(br->maior, pk, rowid);
+		}
+}
+
+void btree_update(int pk, RowId rowid) {
+	_btree_update(conf.root, pk, rowid);
+}

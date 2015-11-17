@@ -44,4 +44,5 @@ void btree_delete(int pk);
 RowId btree_get(int pk);
 void btree_dump();
 void btree_insert(int pk, uint16_t row, uint16_t id);
+void btree_update(int pk, RowId rowid);
 #endif

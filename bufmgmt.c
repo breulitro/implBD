@@ -335,6 +335,7 @@ void insert_with_id(int pk, char *json) {
 	RowId rowid;
 	rowid = insert(json, 0, pk);
 	printf("inserted @ RowId(%d:%d)\n", rowid.id, rowid.row);
+	btree_update(pk, rowid);
 }
 
 void insert_cmd(char *params) {
@@ -568,6 +569,28 @@ void delete_cmd(char *params) {
 	btree_delete(pk);
 }
 
+void delete_without_btree(char *params) {
+	Buffer *b;
+	int pk;
+	RowId r;
+
+	if (!params || strlen(params) == 0) {
+		printf("delete <id>\n");
+		return;
+	}
+
+	pk = atoi(params);
+	r = btree_get(pk);
+	if (!r.id && !r.row) {
+		printf("Arquivo não existe\n");
+		return;
+	}
+
+	b = get_datablock(r.id);
+	b->dirty = 1;
+	delete(b->datablock, r.row);
+}
+
 void load_cmd(char *params) {
 	FILE *fp;
 	char *line = NULL;
@@ -609,6 +632,6 @@ void update_cmd(char *params) {
 	}
 
 	printf("id = %s, json = %s\n", cid, json);
-	delete_cmd(cid);
+	delete_without_btree(cid);
 	insert_with_id(atoi(cid), json);
 }
