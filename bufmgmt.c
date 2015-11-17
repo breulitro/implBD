@@ -512,8 +512,12 @@ void btree_branch_split(short id) {
 	BTHeader *bth, *nbth, *rbth;
 	BTBNode *br, *nbr, *rbr;
 	GList *l;
+	int i;
 
-	newb = get_datablock(get_free_datablock_id());
+	// Aloca novo nodo folha
+	i = get_free_datablock_id();
+	newb = get_datablock(i);
+	newb->id = i;
 	newb->dirty = 1;
 	nbth = (BTHeader *) newb->datablock;
 	nbth->type = BRANCH;
@@ -539,7 +543,9 @@ void btree_branch_split(short id) {
 	br = BR(bth, BRANCH_D);
 	if (!bth->parent) {
 		// Cria novo nodo raiz
-		rootb = get_datablock(get_free_datablock_id());
+		i = get_free_datablock_id();
+		rootb = get_datablock(i);
+		rootb->id = i;
 		// TODO: Acabar de alocar a nova raiz
 		rbth = (BTHeader *) rootb->datablock;
 		rbr = BR(rbth, 0);
@@ -567,7 +573,7 @@ void btree_insert_branch(short id, int pk, short menor, short maior) {
 
 	if (bth->len > BRANCH_D * 2) {
 		DBG("TBD: Branch split\n");
-		btree_branch_split(id);
+		//btree_branch_split(id);
 	}
 }
 
@@ -614,8 +620,9 @@ void btree_leaf_split(short id) {
 
 	// Se não tiver um nó pai, aloca, senão insere nele
 	if (!bth->parent) {
-		newroot->id = get_free_datablock_id();
-		newroot = get_datablock(newroot->id);
+		i = get_free_datablock_id();
+		newroot = get_datablock(i);
+		newroot->id = i;
 		newroot->dirty = 1;
 		rbth = (BTHeader *) newroot->datablock;
 		rbth->type = BRANCH;
@@ -1224,7 +1231,9 @@ int main() {
 	btree_dump();
 	btree_insert(12, 6, 3);
 	btree_dump();
+	DBG("######################\n");
 	btree_insert(13, 6, 3);
+	DBG("######################\n");
 	btree_dump();
 
 	return 0;
