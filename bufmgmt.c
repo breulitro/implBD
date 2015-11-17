@@ -451,16 +451,12 @@ char *get_entry(int pk) {
 
 	return buf;
 }
-typedef struct {
-	int pk;
-	char *json;
-} TableEntry;
 
 void free_table_entry(gpointer data) {
 	TableEntry *te = data;
 
-	free(te->json);
-	free(te);
+	g_free(te->json);
+	g_free(te);
 }
 
 void search_cmd(char *params) {
@@ -589,3 +585,21 @@ void load_cmd(char *params) {
 	fclose(fp);
 }
 
+void update_cmd(char *params) {
+	char *json;
+	char *cid;
+
+	if (!params || strlen(params) == 0) {
+		printf("update <id> <json>\n");
+		return;
+	}
+
+	cid = strtok_r(params, " ", &json);
+
+	if (!json) {
+		printf("update <id> <json>\n");
+		return;
+	}
+
+	printf("id = %s, json = %s\n", cid, json);
+}

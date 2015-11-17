@@ -35,6 +35,8 @@ void parse_cmds(char *full_cmd) {
 
 	if (!(strcmp(cmd, "insert")))
 		insert_cmd(param);
+	else if (!(strcmp(cmd, "update")))
+		update_cmd(param);
 	else if (!(strcmp(cmd, "select")))
 		select_cmd(param);
 	else if (!(strcmp(cmd, "search")))
@@ -54,7 +56,7 @@ void parse_cmds(char *full_cmd) {
 		printf("cmd unknown.\n");
 }
 
-char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump", NULL};
+char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump", "update", NULL};
 
 char* cmd_generator(const char *text, int state) {
 	static int list_index, len;

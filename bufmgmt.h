@@ -55,6 +55,11 @@ typedef struct {
 	RowId next;
 } EntryHeader;
 
+typedef struct {
+	int pk;
+	char *json;
+} TableEntry;
+
 extern Buffer frames[256];
 extern int framesLen;
 extern int vitima;
@@ -68,6 +73,7 @@ void delete_cmd(char *params);
 void search_cmd(char *params);
 void select_cmd(char *params);
 void insert_cmd(char *params);
+void update_cmd(char *params);
 Buffer *get_datablock(int id);
 uint16_t get_free_datablock_id();
 void persist();
