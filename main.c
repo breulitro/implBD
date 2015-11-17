@@ -12,6 +12,9 @@
 
 #include "bufmgmt.h"
 #include "btree.h"
+#include "restfullapi.h"
+
+char running_cli = 0;
 
 void help() {
 	printf("Comandos disponiveis:\n"
@@ -111,24 +114,54 @@ char *trim(char *str) {
 }
 
 void _atexit() {
-	clear_history();
-
 	persist();
 
 	for (int i = 0; i < framesLen; i++) {
 		free(frames[i].datablock);
 	}
 
-	clear_history();
+	// A porra do port da readline pro BSD é muito capenga...
+	//if (!history_list())
+	if (running_cli)
+		clear_history();
 
 	g_list_free(free_blocks);
 
 	printf("hit = %d, miss = %d\n", hit, miss);
 }
 
-int main() {
+void do_cli() {
 	char *cmd, *hist, *aux;
 	char prompt[] = "sgbd> ";
+
+	running_cli = 1;
+	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n\n");
+	// Command Line Interface code
+	rl_attempted_completion_function = cmd_completion;
+	do {
+		cmd = readline(prompt);
+		rl_bind_key('\t',rl_complete);
+
+		aux = cmd;
+		aux = trim(aux);
+		if (!strcmp(aux, "exit") || !strcmp(aux, "quit")){
+			break;
+		}
+
+		hist = strdup(cmd);
+		parse_cmds(cmd);
+		free(cmd);
+		if (hist && *hist)
+			add_history(hist);
+		free(hist);
+	} while (1);
+}
+
+void do_server(int port) {
+	run_server(port);
+}
+
+int main(int argc, char *argv[]) {
 	FILE *fd;
 
 	printf("Pontifícia Universidade Católica do Rio Grande do Sul\n"
@@ -152,7 +185,11 @@ int main() {
 	init_database();
 	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
-	printf("Digite \"help\" ou <tab><tab> para listar os comandos disponíveis.\n\n");
+	if (argc == 2) {
+		do_server(atoi(argv[1]));
+	} else {
+		do_cli();
+	}
 #if 0
 	btree_insert(1, 1, 3);
 	btree_insert(2, 2, 3);
@@ -180,26 +217,6 @@ int main() {
 	btree_dump();
 	return 0;
 #endif
-
-	// Command Line Interface code
-	rl_attempted_completion_function = cmd_completion;
-	do {
-		cmd = readline(prompt);
-		rl_bind_key('\t',rl_complete);
-
-		aux = cmd;
-		aux = trim(aux);
-		if (!strcmp(aux, "exit") || !strcmp(aux, "quit")){
-			break;
-		}
-
-		hist = strdup(cmd);
-		parse_cmds(cmd);
-		free(cmd);
-		if (hist && *hist)
-			add_history(hist);
-		free(hist);
-	} while (1);
 
 	return 0;
 }
