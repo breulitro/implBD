@@ -218,19 +218,38 @@ typedef struct {
 	RowId next;
 } EntryHeader;
 
+short get_free_datablock_id() {
+	GList *l;
+	short i;
+	// Pega o id do primeiro datablock livre da lista de datablocks livres
+	l = g_list_first(free_blocks);
+	if (!l) {
+		printf("Não tem mais datablocks livres\n");
+		return 0;
+	}
+
+	i = (size_t)l->data;
+	// Remove o id do dadablock da lista
+	free_blocks = g_list_delete_link(free_blocks, l);
+	// Seta o datablock como utilizado
+	SET_USED(conf.bitmap, i);
+
+	return i;
+}
+
 Buffer *get_insertable_datablock() {
 	Buffer *b;
 	DBHeader *dbh;
 	GList *id;
 
-	// Caso ainda não haja um datablock inicial para a tabela, inicia com o primeiro
+	// Caso ainda não haja um datablock inicial para a tabela, aloca o primeiro
 	// datablock livre..
 	if (!conf.table) {
-		id = g_list_first(free_blocks);
-		conf.table = (int) id->data;
+		conf.table = get_free_datablock_id();
+		if (!conf.table)
+			exit(1);
+
 		DBG("new table @ datablock(%d)\n", conf.table);
-		free_blocks = g_list_delete_link(free_blocks, id);
-		SET_USED(conf.bitmap, conf.table);
 	}
 
 	b = get_datablock(conf.table);
@@ -253,14 +272,10 @@ Buffer *get_insertable_datablock() {
 			b = get_datablock(dbh->next);
 		} else {
 			DBG("Nao existe proximo datablock\n");
-			if ((id = g_list_first(free_blocks)) == NULL) {
-				printf("Não tem mais datablocks livres\n");
-				return NULL;
-			}
 
 			b->dirty = 1;
-			b = get_datablock((int) id->data);
-			dbh->next = (int) id->data;
+			dbh->next = get_free_datablock_id();
+			b = get_datablock(dbh->next);
 
 			dbh = DBH(b->datablock);
 			if (!dbh->free) 
@@ -490,6 +505,51 @@ void btree_dump() {
 	_btree_dump(conf.root, -1);
 }
 
+void btree_insert_branch(short id, int pk, short menor, short maior);
+
+void btree_branch_split(short id) {
+	Buffer *b, *newb, *rootb;
+	BTHeader *bth, *nbth, *rbth;
+	BTBNode *br, *nbr, *rbr;
+	GList *l;
+
+	newb = get_datablock(get_free_datablock_id());
+	newb->dirty = 1;
+	nbth = (BTHeader *) newb->datablock;
+	nbth->type = BRANCH;
+
+	// Carrega datablock aonde será feito o split
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+
+	// Aponta os nodos para fazer a cópia dos dados
+	br = BR(bth, BRANCH_D + 1);
+	nbr = BR(nbth, 0);
+
+	memcpy(nbr, br, sizeof(BTBNode) * BRANCH_D);
+	bth->len = BRANCH_D;
+	nbth->len = BRANCH_D;
+
+	// Faz os apontamentos dos siblings e do parent
+	nbth->prev = b->id;
+	bth->next = newb->id;
+	nbth->parent = bth->parent;
+
+	// Aponta para o nodo que vai subir pra raiz (ou branch)
+	br = BR(bth, BRANCH_D);
+	if (!bth->parent) {
+		// Cria novo nodo raiz
+		rootb = get_datablock(get_free_datablock_id());
+		// TODO: Acabar de alocar a nova raiz
+		rbth = (BTHeader *) rootb->datablock;
+		rbr = BR(rbth, 0);
+		rbth->len = rbth->len + 1;
+	} else {
+		// Adiciona no parent
+		btree_insert_branch(bth->parent, br->pk, b->id, newb->id);
+	}
+}
+
 void btree_insert_branch(short id, int pk, short menor, short maior) {
 	Buffer *b;
 	BTHeader *bth;
@@ -505,8 +565,10 @@ void btree_insert_branch(short id, int pk, short menor, short maior) {
 	br->maior = maior;
 	b->dirty = 1;
 
-	if (bth->len > BRANCH_D * 2)
+	if (bth->len > BRANCH_D * 2) {
 		DBG("TBD: Branch split\n");
+		btree_branch_split(id);
+	}
 }
 
 void btree_leaf_split(short id) {
@@ -549,15 +611,11 @@ void btree_leaf_split(short id) {
 	nbth->parent = bth->parent;
 
 	DBG("Novo nodo folha(%d) criado\n", i);
+
+	// Se não tiver um nó pai, aloca, senão insere nele
 	if (!bth->parent) {
-		DBG("Alocando novo nodo raiz\n");
-		//Aloca novo nodo raiz
-		l = g_list_first(free_blocks);
-		i = (int)l->data;
-		free_blocks = g_list_delete_link(free_blocks, l);
-		SET_USED(conf.bitmap, i);
-		newroot = get_datablock(i);
-		newroot->id = i;
+		newroot->id = get_free_datablock_id();
+		newroot = get_datablock(newroot->id);
 		newroot->dirty = 1;
 		rbth = (BTHeader *) newroot->datablock;
 		rbth->type = BRANCH;
@@ -571,6 +629,7 @@ void btree_leaf_split(short id) {
 		// Apontamento dos parents
 		bth->parent = nbth->parent = i;
 		conf.root = i;
+		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
 	} else {
 		btree_insert_branch(bth->parent, nlf->pk, b->id, newb->id);
 	}
@@ -631,11 +690,8 @@ void btree_insert(int pk, short row, short id) {
 
 	// Caso não haja um datablock inicial para a BTree+
 	if (!conf.root) {
-		l = g_list_first(free_blocks);
-		conf.root = (int) l->data;
+		conf.root = get_free_datablock_id();
 		DBG("new BTree+ root @ datablock(%d)\n", conf.root);
-		free_blocks = g_list_delete_link(free_blocks, l);
-		SET_USED(conf.bitmap, conf.root);
 	}
 
 
