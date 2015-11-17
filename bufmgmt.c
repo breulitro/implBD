@@ -257,7 +257,7 @@ Buffer *get_insertable_datablock() {
 
 	if (!dbh->free)
 		if (!dbh->full)
-			dbh->free = DATABLOCK - sizeof(DBHeader);
+			dbh->free = DATABLOCK - sizeof(DBHeader) - 1;
 
 	DBG("To te pegando um datablock com %d bytes livres\n", dbh->free);
 
@@ -280,7 +280,7 @@ Buffer *get_insertable_datablock() {
 			dbh = DBH(b->datablock);
 			if (!dbh->free) 
 				if (!dbh->full)
-					dbh->free = DATABLOCK - sizeof(DBHeader);
+					dbh->free = DATABLOCK - sizeof(DBHeader) - 1;
 			DBG("db(%d)->free(%d)\n", b->id, dbh->free);
 		}
 		dbh = DBH(b->datablock);
@@ -826,29 +826,22 @@ RowId insert(char *json, char chained) {
 
 	DBG("Chegando pra inserir: %s\n", json);
 	len = strlen(json);
-	DBG("len = %d\n", len);
 	dbh = DBH(b->datablock);
 	dbh->header_len++;
-	DBG("dbh->free(%d) - sizeof(EntryHeader)(%lu) = %lu\n", dbh->free, sizeof(EntryHeader), dbh->free - sizeof(EntryHeader));
 	dbh->free = dbh->free - sizeof(EntryHeader);
 	DBG("dbh->free(%d)\n", dbh->free);
 	eh = EH(dbh, dbh->header_len);
 	eh->init = dbh->next_init;
 	DBG("init = %d\n", eh->init);
-	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
-			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
 	// Se for um chained, seta a pk pra zero
 	eh->pk = chained ? 0 : conf.nextpk++;
 	DBG("pk = %d\n", eh->pk);
 
 	// A partir deste ponto, len passa a ser uma flag pra sinalizar se
 	// o json coube inteiro neste datablock
-	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
-			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
 	if (len > dbh->free) {
 		DBG("Vai encadear\n");
-		eh->offset = dbh->free - 1; //FIXME: Ta errado botar esse -1...
-		dbh->free = dbh->free - 1;
+		eh->offset = dbh->free; //FIXME: Ta errado botar esse -1...
 		len = 1;
 		dbh->full = 1;
 	} else {
@@ -859,8 +852,8 @@ RowId insert(char *json, char chained) {
 	//dbh->next_init += eh->offset;
 	dbh->next_init = dbh->next_init + eh->offset;
 
-	DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
-			dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
+	//DBG("free(%d), offset(%d), header(%ld) | free - offset - header = %ld\n",
+	//		dbh->free, eh->offset, sizeof(EntryHeader), dbh->free - eh->offset - sizeof(EntryHeader));
 
 	DBG("copiando para a posição %ld do buffer\n", &b->datablock[eh->init] - b->datablock);
 	DBG("writing %d bytes @ %d\n", eh->offset, eh->init);
@@ -1057,15 +1050,19 @@ void delete(char *datablock, short row) {
 
 	// Como não da pra mudar o RowId, o datablock fica com um EntryHeader queimado
 	eh->pk = 0; // pk começa em 1, 0 indica que o EntryHeader é inválido
-	if (row < dbh->header_len) {
+	dbh->free = dbh->free + eh->offset;
+	if (row < dbh->header_len - 1) {
 		// Caso não seja o último row do datablock, desfragmentamos
 		ehaux = EH(dbh, row + 1);
 		memcpy(&datablock[eh->init], &datablock[ehaux->init], dbh->next_init - ehaux->init);
 		ehaux->init = eh->init;
+		dbh->next_init = dbh->next_init - (dbh->next_init - ehaux->init);
 		// ehaux->offset continua o mesmo
-	}
+	} else 
+		dbh->next_init = dbh->next_init - (dbh->next_init - eh->init);
 
 	if (*(int *)&eh->next != 0) {
+		DBG("Deletando chainedrow\n");
 		b = get_datablock(eh->next.id);
 		delete(b->datablock, eh->next.row);
 		b->dirty = 1;
