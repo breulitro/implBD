@@ -28,7 +28,7 @@
 #endif
 
 typedef struct Buffer {
-	int id;
+	uint32_t id;
 	char *datablock;
 	char dirty;
 	char used;
@@ -51,8 +51,8 @@ typedef struct {
 
 
 typedef struct {
-	short row;
-	short id;
+	uint16_t row;
+	uint16_t id;
 } RowId;
 
 Buffer frames[256];
@@ -213,14 +213,14 @@ void init_database() {
 
 typedef struct {
 	int pk;
-	short init;
-	short offset;
+	uint16_t init;
+	uint16_t offset;
 	RowId next;
 } EntryHeader;
 
-short get_free_datablock_id() {
+uint16_t get_free_datablock_id() {
 	GList *l;
-	short i;
+	uint16_t i;
 	// Pega o id do primeiro datablock livre da lista de datablocks livres
 	l = g_list_first(free_blocks);
 	if (!l) {
@@ -297,10 +297,10 @@ typedef enum {
 } BTType;
 
 typedef struct {
-	short len;
-	short prev;
-	short next;
-	short parent;
+	uint16_t len;
+	uint16_t prev;
+	uint16_t next;
+	uint16_t parent;
 	BTType type;
 } BTHeader;
 
@@ -308,9 +308,9 @@ typedef struct {
 // prev e no next pra estrutura ficar uniforme. Isso deixa a estrutura com 12 bytes.
 // E não é isso que a gente quer, queremos ela com seus 8 bytes enxutos!
 typedef struct {
-	short menor;
+	uint16_t menor;
 	int pk;
-	short maior;
+	uint16_t maior;
 } __attribute__((__packed__)) BTBNode;
 
 typedef struct {
@@ -320,7 +320,7 @@ typedef struct {
 
 #if 0
 // Desconta o Header da BTree + 1 Nodo para permitir a inserção do 2d+1-ésimo elemento
-#define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(short))) / 2)
+#define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(uint16_t))) / 2)
 #define LEAF_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTLNode)) / sizeof(BTLNode)) / 2)
 #else
 // Para propósito de testes, até estabilizar a BTree+
@@ -328,7 +328,7 @@ typedef struct {
 #define LEAF_D 2L
 #endif
 
-#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(short))) : (char *)(block) + sizeof(BTHeader)))
+#define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(uint16_t))) : (char *)(block) + sizeof(BTHeader)))
 #define LF(block, i) ((BTLNode *) ((char *)(block) + (sizeof(BTHeader) + (i) * sizeof(BTLNode))))
 void _btree_delete(int pk, int id) {
 	Buffer *b;
@@ -374,7 +374,7 @@ void btree_delete(int pk) {
 	_btree_delete(pk, conf.root);
 }
 
-RowId btree_leaf_get(short id, int pk) {
+RowId btree_leaf_get(uint16_t id, int pk) {
 	Buffer *b;
 	BTHeader *bth;
 	BTLNode *lf;
@@ -393,7 +393,7 @@ RowId btree_leaf_get(short id, int pk) {
 	return (RowId){0,0};
 }
 
-RowId btree_branch_get(short id, int pk) {
+RowId btree_branch_get(uint16_t id, int pk) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
@@ -443,7 +443,7 @@ RowId btree_get(int pk) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
-void btree_dump_leaf(short id, int padding) {
+void btree_dump_leaf(uint16_t id, int padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth;
@@ -465,7 +465,7 @@ void btree_dump_leaf(short id, int padding) {
 	printf("\n");
 }
 
-void _btree_dump(short id, int padding) {
+void _btree_dump(uint16_t id, int padding) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth;
@@ -508,9 +508,9 @@ void btree_dump() {
 	_btree_dump(conf.root, 0);
 }
 
-void btree_insert_branch(short id, int pk, short menor, short maior);
+void btree_insert_branch(uint16_t id, int pk, uint16_t menor, uint16_t maior);
 
-void btree_branch_split(short id) {
+void btree_branch_split(uint16_t id) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth, *nbth, *rbth;
@@ -542,9 +542,9 @@ void btree_branch_split(short id) {
 	nbr = BR(nbth, 0);
 	// Copia da metade em diate do nodo $id para nbr
 	DBG("Copiando %lu bytes a partir do pk(%d)\n",
-			sizeof(short) + (sizeof(BTBNode) - sizeof(short)) * (BRANCH_D),
+			sizeof(uint16_t) + (sizeof(BTBNode) - sizeof(uint16_t)) * (BRANCH_D),
 			br->pk);
-	memcpy(nbr, br, sizeof(short) + (sizeof(BTBNode) - sizeof(short)) * (BRANCH_D));
+	memcpy(nbr, br, sizeof(uint16_t) + (sizeof(BTBNode) - sizeof(uint16_t)) * (BRANCH_D));
 	nbth->len = BRANCH_D;
 	bth->len = BRANCH_D;
 	DBG("nbr->pk(%d)\n", nbr->pk);
@@ -588,7 +588,7 @@ void btree_branch_split(short id) {
 	}
 }
 
-void btree_insert_branch(short id, int pk, short menor, short maior) {
+void btree_insert_branch(uint16_t id, int pk, uint16_t menor, uint16_t maior) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
@@ -609,7 +609,7 @@ void btree_insert_branch(short id, int pk, short menor, short maior) {
 	}
 }
 
-void btree_leaf_split(short id) {
+void btree_leaf_split(uint16_t id) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
 	BTHeader *bth, *nbth, *rbth;
@@ -676,7 +676,7 @@ void btree_leaf_split(short id) {
 	//conf.root = newroot->id;
 }
 
-void btree_insert_node(short id, int pk, RowId rowid) {
+void btree_insert_node(uint16_t id, int pk, RowId rowid) {
 	Buffer *b;
 	GList *l;
 	BTHeader *bth;
@@ -712,7 +712,7 @@ void btree_insert_node(short id, int pk, RowId rowid) {
 	}
 }
 
-void btree_insert(int pk, short row, short id) {
+void btree_insert(int pk, uint16_t row, uint16_t id) {
 	Buffer *b;
 	GList *l;
 	BTHeader *bth;
@@ -1034,7 +1034,7 @@ void search_cmd(char *params) {
 	EntryHeader *eh;
 	TableEntry *te;
 	GList *x, *l = NULL;
-	short i;
+	uint16_t i;
 	char *json;
 
 	b = get_datablock(conf.table);
@@ -1077,7 +1077,7 @@ void search_cmd(char *params) {
 	g_list_free_full(l, free_table_entry);
 }
 
-void delete(char *datablock, short row) {
+void delete(char *datablock, uint16_t row) {
 	Buffer *b;
 	DBHeader *dbh;
 	EntryHeader *eh, *ehaux;
