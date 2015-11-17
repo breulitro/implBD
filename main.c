@@ -16,6 +16,7 @@
 void help() {
 	printf("Comandos disponiveis:\n"
 			"\t- insert <json>\n"
+			"\t- update <id> <json>\n"
 			"\t- search <tag>\n"
 			"\t- select <pk>\n"
 			"\t- delete <pk>\n"

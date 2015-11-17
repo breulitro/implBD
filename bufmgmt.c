@@ -402,6 +402,7 @@ void select_cmd(char *params) {
 		return;
 	}
 
+	DBG("%d @ %d:%d\n", pk, r.id, r.row);
 	b = get_datablock(r.id);
 	dbh = DBH(b->datablock);
 	eh = EH(dbh, r.row);
