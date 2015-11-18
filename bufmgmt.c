@@ -421,7 +421,6 @@ char *select_cmd_http(char *params) {
 	buf[eh->offset] = 0;
 
 	printf("primeiro copy feito\n");
-	buf = NULL;
 	if (*(int *)&eh->next != 0)
 		_select(eh->next, &buf, eh->offset);
 
