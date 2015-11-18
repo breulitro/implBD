@@ -160,9 +160,7 @@ void _btree_dump(uint16_t id, int padding) {
 	else {
 		for (i = 0; i < bth->len; i++) {
 			br = BR(bth, i);
-			if (!i) {
-				_btree_dump(br->menor, padding + 1);
-			}
+			_btree_dump(br->menor, padding + 1);
 			for (p = 0; p < padding; p++)
 				printf("\t");
 			printf("%d\n", br->pk);
@@ -189,6 +187,37 @@ void btree_dump() {
 
 void btree_insert_branch(uint16_t id, int pk, uint16_t menor, uint16_t maior);
 
+void _btree_update_parent(uint16_t id, uint16_t parent) {
+	Buffer *b;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+	bth->parent = parent;
+}
+
+void btree_update_parent(uint16_t id) {
+	Buffer *b;
+	BTHeader *bth;
+	BTBNode *br;
+	BTLNode *lf;
+
+	b = get_datablock(id);
+	bth = (BTHeader *) b->datablock;
+	if (bth->type == LEAF) {
+		printf("Não era pra estar sendo chamada esta função com um nodo LEAF\n");
+		return;
+	}
+
+	for (int i = 0; i < bth->len; i++) {
+		br = BR(bth, i);
+		_btree_update_parent(br->menor, id);
+		_btree_update_parent(br->maior, id);
+	}
+}
+
 void btree_branch_split(uint16_t id) {
 	Buffer *b, *newroot, *newb;
 	GList *l;
@@ -214,7 +243,6 @@ void btree_branch_split(uint16_t id) {
 	nbth = (BTHeader *) newb->datablock;
 	nbth->type = BRANCH;
 
-	btree_dump();
 	// Posiciona br na metade
 	br = BR(bth, BRANCH_D + 1);
 	// Posiciona nbr no começo
@@ -226,18 +254,18 @@ void btree_branch_split(uint16_t id) {
 	memcpy(nbr, br, sizeof(uint16_t) + (sizeof(BTBNode) - sizeof(uint16_t)) * (BRANCH_D));
 	nbth->len = BRANCH_D;
 	bth->len = BRANCH_D;
-	DBG("nbr->pk(%d)\n", nbr->pk);
-	nbr = BR(nbth, 1);
-	DBG("nbr->pk(%d)\n", nbr->pk);
+
+#ifdef DEBUG
 	DBG("Menores\n");
 	_btree_dump(b->id, -1);
 	DBG("Maiores\n");
+	if (DEBUG)
 	_btree_dump(newb->id, -1);
+#endif
 
 	// Apontamento dos simblings e parent
 	bth->next = newb->id;
 	nbth->prev = b->id;
-	nbth->parent = bth->parent;
 
 	DBG("Novo nodo folha(%d) criado\n", i);
 
@@ -260,14 +288,17 @@ void btree_branch_split(uint16_t id) {
 		newroot->dirty = 1;
 		// Apontamento dos parents
 		bth->parent = nbth->parent = i;
+		btree_update_parent(rbr->maior);
 		conf.root = i;
 		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
 	} else {
+		nbth->parent = bth->parent;
 		btree_insert_branch(bth->parent, nbr->pk, b->id, newb->id);
 	}
 }
 
 void btree_insert_branch(uint16_t id, int pk, uint16_t menor, uint16_t maior) {
+	assert(menor < maior);
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
@@ -298,6 +329,7 @@ void btree_leaf_split(uint16_t id) {
 
 	printf("Leaf Split\n");
 	b = get_datablock(id);
+	b->id = id;
 	bth = (BTHeader *) b->datablock;
 	b->dirty = 1;
 
@@ -326,7 +358,6 @@ void btree_leaf_split(uint16_t id) {
 	// Apontamento dos simblings e parent
 	bth->next = newb->id;
 	nbth->prev = b->id;
-	nbth->parent = bth->parent;
 
 	DBG("Novo nodo folha(%d) criado\n", i);
 
@@ -347,9 +378,14 @@ void btree_leaf_split(uint16_t id) {
 		newroot->dirty = 1;
 		// Apontamento dos parents
 		bth->parent = nbth->parent = i;
+		rbth->parent = 0;
 		conf.root = i;
 		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
 	} else {
+		printf("ja tem parent\n");
+		printf("menor = %d, maior = %d\n", b->id, newb->id);
+		printf("parent = %d\n", bth->parent);
+		nbth->parent = bth->parent;
 		btree_insert_branch(bth->parent, nlf->pk, b->id, newb->id);
 	}
 	//conf.root = newroot->id;

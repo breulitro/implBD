@@ -188,13 +188,7 @@ int main(int argc, char *argv[]) {
 	init_database();
 	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
-	if (argc == 2) {
-		do_server(atoi(argv[1]));
-	}
-
-	do_cli();
-
-#if 0
+#if 1
 	btree_insert(1, 1, 3);
 	btree_insert(2, 2, 3);
 	btree_insert(3, 3, 3);
@@ -202,25 +196,29 @@ int main(int argc, char *argv[]) {
 	btree_insert(5, 5, 3);
 	btree_dump();
 	btree_insert(6, 6, 3);
-	btree_dump();
 	btree_insert(7, 6, 3);
 	btree_dump();
 	btree_insert(8, 6, 3);
-	btree_dump();
 	btree_insert(9, 6, 3);
 	btree_dump();
 	btree_insert(10, 6, 3);
-	btree_dump();
 	btree_insert(11, 6, 3);
 	btree_dump();
 	btree_insert(12, 6, 3);
-	btree_dump();
-	DBG("######################\n");
 	btree_insert(13, 6, 3);
-	DBG("######################\n");
+	btree_dump();
+	btree_insert(14, 6, 3);
+	btree_dump();
+	btree_insert(15, 6, 3);
 	btree_dump();
 	return 0;
 #endif
+	if (argc == 2) {
+		do_server(atoi(argv[1]));
+	}
+
+	do_cli();
+
 
 	server_running = 0;
 	pthread_cancel(th);
