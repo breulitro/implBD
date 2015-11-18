@@ -1,3 +1,10 @@
+/*
+ * As funções get_line e startup foram copiadas "ibsis literis" do tinyhttpd.
+ * A função unimplemented foi modificada para dar uma resposta mais coerente.
+ * E a função httpok foi criada por mim.
+ */
+
+
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
@@ -124,19 +131,9 @@ void unimplemented(int client)
 
 	sprintf(buf, "HTTP/1.0 501 Method Not Implemented\r\n");
 	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "Server: tinyhttpd");
+	sprintf(buf, "Content-Length: %lu\r\n\r\n", strlen("Comando fora do padrão da RESTfull API.\n"));
 	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "Content-Type: text/html\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<HTML><HEAD><TITLE>Method Not Implemented\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "</TITLE></HEAD>\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "<BODY><P>HTTP request method not supported.\r\n");
-	send(client, buf, strlen(buf), 0);
-	sprintf(buf, "</BODY></HTML>\r\n");
+	sprintf(buf, "Comando fora do padrão da RESTfull API.\n");
 	send(client, buf, strlen(buf), 0);
 }
 

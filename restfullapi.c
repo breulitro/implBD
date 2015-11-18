@@ -110,7 +110,6 @@ void parse_http(int client) {
 			aux = strstr(buf, "/search/");
 			aux += strlen("/search/");
 			aux = strtok(aux, " ");
-			LOG("Search: %s\n", aux);
 			ret = search_cmd_http(aux);
 
 			if (ret)
