@@ -14,7 +14,7 @@
 
 #include "bufmgmt.h"
 #include "btree.h"
-#include "restfullapi.h"
+#include "restapi.h"
 
 char running_cli = 0;
 pthread_t th;

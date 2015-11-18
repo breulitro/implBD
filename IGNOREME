@@ -11,7 +11,7 @@ Para rodar com o servidor, basta executar o comando "./sgbd <port>".
 Se rodar sem parâmetros ele não roda o servidor e apresenta apenas a CLI.
 O servidor gera um arquivo de log "server.log"
 
-A documentação da RESTfull API está no cabeçalho do arquivo "restfullapi.c"
+A documentação da REST API está no cabeçalho do arquivo "restapi.c"
 Para testar a API basta rodar o comando "./sgbd-client <port>".
 O cliente tem suporte apenas para localhost, embora o sgbd aceite conexões remotas.
 
