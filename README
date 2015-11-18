@@ -1,0 +1,20 @@
+Professor,
+
+Para buildar é necessário ter instaladas as bibliotecas:
+	- GLib
+	- GNU Readline
+	- Pthreads
+
+Para rodar com o servidor, basta executar o comando "./sgbd <port>".
+Se rodar sem parâmetros ele não roda o servidor e apresenta apenas a CLI.
+
+A documentação da RESTfull API está no cabeçalho do arquivo "restfullapi.c"
+Fiz os testes utilizando a curl.
+
+O merge da btree não foi implementado pois perdi a aula em que o senhor explicou essa matéria.
+Tentei ler o pdf que foi disponibilizado no moodle mas não obtive sucesso em compreende-lo...
+O delete da btree apenas remove o elemento do nodo folha.
+O insert da btree utiliza uma heurística para simplificar o algorítmo.
+
+Acho que é isso. Qualquer dúvida pode me enviar por email benitomichelon@gmail.com
+Abraço e boa correção!
