@@ -366,7 +366,7 @@ void _select(RowId rowid, char **buf, int len) {
 	Buffer *b;
 	DBHeader *dbh;
 	EntryHeader *eh;
-	char *baux;
+	char *baux, *aux;;
 
 	b = get_datablock(rowid.id);
 	dbh = DBH(b->datablock);
@@ -374,7 +374,10 @@ void _select(RowId rowid, char **buf, int len) {
 	baux = malloc(eh->offset + 1);
 	memcpy(baux, &b->datablock[eh->init], eh->offset);
 	baux[eh->offset] = 0;
-	*buf = strcat(*buf, baux);
+	aux = *buf;
+	*buf = g_strconcat(*buf, baux, NULL);
+	g_free(aux);
+	g_free(baux);
 	DBG("buf = %s\n", *buf);
 	if (*(int *)&eh->next) {
 		DBG("select denovo\n");
@@ -418,6 +421,7 @@ char *select_cmd_http(char *params) {
 	buf[eh->offset] = 0;
 
 	printf("primeiro copy feito\n");
+	buf = NULL;
 	if (*(int *)&eh->next != 0)
 		_select(eh->next, &buf, eh->offset);
 
