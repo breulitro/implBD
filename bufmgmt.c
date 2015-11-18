@@ -214,8 +214,6 @@ Buffer *get_insertable_datablock() {
 
 	DBG("db(%d)->free(%d)\n", b->id, dbh->free);
 	while (dbh->free <  sizeof(EntryHeader)) {
-		printf("entrou no while\n");
-		sleep(1);
 		DBG("dbh->free(%d) < sizeof(EntryHeader)(%lu)\n", dbh->free, sizeof(EntryHeader));
 		DBG("next(%d)\n", dbh->next);
 		if (dbh->next) {
