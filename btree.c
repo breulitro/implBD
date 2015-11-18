@@ -78,7 +78,6 @@ RowId btree_branch_get(uint16_t id, int pk) {
 	BTBNode *br;
 	int i;
 
-	printf("Search na branch\n");
 	b = get_datablock(conf.root);
 	bth = (BTHeader *) b->datablock;
 
@@ -120,13 +119,9 @@ RowId btree_get(int pk) {
 		return btree_branch_get(b->id, pk);
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
 void btree_dump_leaf(uint16_t id, int padding) {
-	Buffer *b, *newroot, *newb;
-	GList *l;
+	Buffer *b;
 	BTHeader *bth;
-	BTBNode *br;
 	BTLNode *lf;
 	int i, p;
 
@@ -145,11 +140,9 @@ void btree_dump_leaf(uint16_t id, int padding) {
 }
 
 void _btree_dump(uint16_t id, int padding) {
-	Buffer *b, *newroot, *newb;
-	GList *l;
+	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
-	BTLNode *lf;
 	int i, p;
 
 	b = get_datablock(id);
@@ -171,13 +164,6 @@ void _btree_dump(uint16_t id, int padding) {
 }
 
 void btree_dump() {
-	Buffer *b, *newroot, *newb;
-	GList *l;
-	BTHeader *bth;
-	BTBNode *br;
-	BTLNode *lf;
-	int i;
-
 	if (!conf.root) {
 		printf("Btree+ vazia\n");
 		return;
@@ -192,7 +178,6 @@ void _btree_update_parent(uint16_t id, uint16_t parent) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
-	BTLNode *lf;
 
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
@@ -209,12 +194,11 @@ void btree_update_parent(uint16_t id) {
 	Buffer *b;
 	BTHeader *bth;
 	BTBNode *br;
-	BTLNode *lf;
 
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
 	if (bth->type == LEAF) {
-		printf("Não era pra estar sendo chamada esta função com um nodo LEAF\n");
+		DBG("Não era pra estar sendo chamada esta função com um nodo LEAF\n");
 		return;
 	}
 
@@ -337,7 +321,7 @@ void btree_leaf_split(uint16_t id) {
 	BTLNode *lf, *nlf;
 	int i;
 
-	printf("Leaf Split\n");
+	DBG("Leaf Split\n");
 	b = get_datablock(id);
 	b->id = id;
 	bth = (BTHeader *) b->datablock;
@@ -394,9 +378,6 @@ void btree_leaf_split(uint16_t id) {
 		conf.root = i;
 		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
 	} else {
-		printf("ja tem parent\n");
-		printf("menor = %d, maior = %d\n", b->id, newb->id);
-		printf("parent = %d\n", bth->parent);
 		nbth->parent = bth->parent;
 		btree_insert_branch(bth->parent, nlf->pk, b->id, newb->id);
 		btree_update_parent(bth->parent);
@@ -406,24 +387,15 @@ void btree_leaf_split(uint16_t id) {
 
 void btree_insert_node(uint16_t id, int pk, RowId rowid) {
 	Buffer *b;
-	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
 	BTLNode *lf;
-	int i;
 
-	printf("Inserindo btree no datablock(%d)\n", id);
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
 
 	if (bth->type == LEAF) {
 		lf = LF(bth, bth->len);
-		/*
-		printf("bth @ %d\n", (int)((char *)bth - b->datablock) % DATABLOCK);
-		assert((int)((char *)bth - b->datablock) % DATABLOCK == 0);
-		printf("lf @ %d\n", (int)((char *)lf - (char *)bth) % DATABLOCK);
-		assert((int)((char *)lf - (char *)bth) % DATABLOCK == sizeof(BTHeader));
-		*/
 		lf->pk = pk;
 		lf->rowid.row = rowid.row;
 		lf->rowid.id = rowid.id;
@@ -442,17 +414,11 @@ void btree_insert_node(uint16_t id, int pk, RowId rowid) {
 
 void btree_insert(int pk, uint16_t row, uint16_t id) {
 	Buffer *b;
-	GList *l;
 	BTHeader *bth;
 	BTBNode *br;
-	BTLNode *lf;
 	RowId rowid;
-	int i;
-#pragma GCC diagnostic pop
 
-	DBG("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
-	printf("inserindo %d @ %d:%d\n", pk, id, row);
-
+	DBG("inserindo %d @ %d:%d\n", pk, id, row);
 	// Caso não haja um datablock inicial para a BTree+
 	if (!conf.root) {
 		conf.root = get_free_datablock_id();
@@ -484,56 +450,6 @@ void btree_insert(int pk, uint16_t row, uint16_t id) {
 			btree_insert_node(br->maior, pk, rowid);
 		}
 	}
-
-#if 0
-	for (i = 0; i < bth->len; i++) {
-		if (bth->type == LEAF) {
-			lf = LF(bth, i);
-			if (lf->pk < pk)
-				continue;
-			// Se cair aqui é pq estamos inserindo no meio
-			if (bth->len) {
-				// Se não for o primeiro elemento, temos que abrir espaço
-				memmove(lf + sizeof(BTLNode), lf, (bth->len - i) * sizeof(BTLNode));
-			}
-
-			lf->pk = pk;
-			lf->rowid.row = row;
-			lf->rowid.id = id;
-			bth->len++;
-
-			DBG("meio - inserindo leafnode %d\n", bth->len);
-
-			if (bth->len > LEAF_D * 2)
-				// Leaf Split
-				printf("TBD: Leaf Split\n");
-			break;
-		} else {
-			br = BR(bth, i);
-			printf("TBD: Branch insert\n");
-		}
-	}
-
-	if (i == bth->len) {
-		//Se cair aqui é pq estamos inserindo no final
-		if (bth->type == LEAF) {
-			lf = LF(bth, i);
-			lf->pk = pk;
-			lf->rowid.row = row;
-			lf->rowid.id = id;
-			bth->len++;
-
-			DBG("inicio - inserindo leafnode %d\n", bth->len);
-
-			if (bth->len > LEAF_D * 2)
-				// Leaf Split
-				printf("TBD: Leaf Split\n");
-		} else {
-			br = BR(bth, i);
-			printf("TBD: Branch insert\n");
-		}
-	}
-#endif
 }
 
 void _btree_update(int id, int pk, RowId rowid) {

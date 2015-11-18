@@ -48,7 +48,7 @@ Buffer *get_datablock(int id) {
 		if (!fd)
 			printf("Erro ao abrir .datafile\n"), exit(1);
 
-		//printf("Frames ainda nao ta cheio\n");
+		DBG("Frames ainda nao ta cheio\n");
 		frames[framesLen].datablock = malloc(DATABLOCK);
 		frames[framesLen].id = id;
 		frames[framesLen].dirty = 0;
@@ -59,7 +59,7 @@ Buffer *get_datablock(int id) {
 
 		DBG("Reading datablock(%d) @ %ld\n", id, ftell(fd));
 		if (fread(frames[framesLen].datablock, 1, DATABLOCK, fd) < DATABLOCK) {
-			perror("fudeu"), printf("Erro lendo datablock %d\n", id), exit(1);
+			printf("Erro lendo datablock %d\n", id), exit(1);
 		}
 		fclose(fd);
 
@@ -78,12 +78,10 @@ Buffer *get_datablock(int id) {
 	if (frames[vitima].dirty) {
 		fd = fopen(DATAFILE, "r+");
 		assert(!fseek(fd, frames[vitima].id * DATABLOCK, SEEK_SET));
-		//printf("writing on %zd\n", ftell(fd));
 
 		if (fwrite(frames[vitima].datablock, 1, DATABLOCK, fd) < DATABLOCK)
-			printf("Erro salvando datablock %d\n", frames[vitima].id), perror("qq deu?"), exit(1);
+			printf("Erro salvando datablock %d\n", frames[vitima].id), exit(1);
 		fclose(fd);
-		//fd = NULL;
 	}
 
 	fd = fopen(DATAFILE, "r+");
@@ -115,7 +113,6 @@ void persist() {
 			fd = fopen(DATAFILE, "r+");
 			assert(fd);
 			fseek(fd, frames[i].id * DATABLOCK, SEEK_SET);
-			//printf("writing on %zd\n", ftell(fd));
 
 			if (fwrite(frames[i].datablock, DATABLOCK, 1, fd) != 1)
 				printf("Erro salvando datablock %d\n", frames[i].id), exit(1);
@@ -162,7 +159,7 @@ void init_database() {
 	for (i = 0; i < (FILESIZE / DATABLOCK / 8); i++) {
 		if (!IS_USED(conf.bitmap, i))
 			free_blocks = g_list_append(free_blocks, (gpointer) i);
-#ifdef DEBUG
+#if DEBUG
 		else
 			DBG("Datablock %ld ocupado\n", i);
 #endif
@@ -191,7 +188,6 @@ uint16_t get_free_datablock_id() {
 Buffer *get_insertable_datablock() {
 	Buffer *b;
 	DBHeader *dbh;
-	GList *id;
 
 	// Caso ainda não haja um datablock inicial para a tabela, aloca o primeiro
 	// datablock livre..
@@ -210,7 +206,7 @@ Buffer *get_insertable_datablock() {
 		if (!dbh->full)
 			dbh->free = DATABLOCK - sizeof(DBHeader) - 1;
 
-	DBG("To te pegando um datablock com %d bytes livres\n", dbh->free);
+	DBG("To pegando um datablock com %d bytes livres\n", dbh->free);
 
 	DBG("db(%d)->free(%d)\n", b->id, dbh->free);
 	while (dbh->free <  sizeof(EntryHeader)) {
@@ -230,10 +226,8 @@ Buffer *get_insertable_datablock() {
 			if (!dbh->free) 
 				if (!dbh->full)
 					dbh->free = DATABLOCK - sizeof(DBHeader) - 1;
-			DBG("db(%d)->free(%d)\n", b->id, dbh->free);
 		}
 		dbh = DBH(b->datablock);
-		DBG("db(%d)->free(%d)\n", b->id, dbh->free);
 	}
 	DBG("db(%d)->free(%d)\n", b->id, dbh->free);
 
@@ -290,26 +284,18 @@ RowId insert(char *json, char chained, int pk) {
 
 	DBG("copiando para a posição %ld do buffer\n", &b->datablock[eh->init] - b->datablock);
 	DBG("writing %d bytes @ %d\n", eh->offset, eh->init);
-	DBG("antes pk = %d\n", eh->pk);
-	DBG("pk @ %ld\n", (char *)&eh->pk - b->datablock);
-	DBG("eh @ %ld\n", (char *)eh - b->datablock);
 	memcpy(&b->datablock[eh->init], json, eh->offset);
-	DBG("depois pk = %d\n", eh->pk);
 
 	//dbh->free -= eh->offset - sizeof(EntryHeader);
-	DBG("free(%d) - offset(%d) = %d\n", dbh->free, eh->offset, dbh->free - eh->offset);
 	dbh->free = dbh->free - eh->offset;
 	if (dbh->free == 0)
 		dbh->full = 1;
-	DBG("free(%d)\n", dbh->free);
 
 	if (len) {
 		DBG("Encadeando\n");
-		DBG("antes pk = %d\n", eh->pk);
 		rowid = insert(&json[eh->offset], 1, 0);
-		DBG("depois pk = %d\n", eh->pk);
 		DBG("ChainedRow @ %d:%d\n", rowid.id, rowid.row);
-		if ( *(int *) &rowid == 0L) {
+		if (*(int *) &rowid == 0L) {
 			DBG("Não consegui encadear, desfazendo operação\n");
 			// Roll-back, desfaz o insert que não coube nos datablocks disponíveis
 			dbh->header_len--;
@@ -332,17 +318,12 @@ RowId insert(char *json, char chained, int pk) {
 void insert_with_id(int pk, char *json) {
 	RowId rowid;
 	rowid = insert(json, 0, pk);
-	printf("inserted @ RowId(%d:%d)\n", rowid.id, rowid.row);
+	DBG("inserted %d @ RowId(%d:%d)\n", pk, rowid.id, rowid.row);
 	btree_update(pk, rowid);
 }
 
 void insert_cmd(char *params) {
-	// "params" deve conter o json a ser inserido
-	// NÃO É FEITA VALIDAÇÃO DO DOCUMENTO JSON!
 	int len;
-	Buffer *b;
-	DBHeader *dbh;
-	EntryHeader *eh;
 	RowId rowid;
 
 	if (!params) {
@@ -357,8 +338,8 @@ void insert_cmd(char *params) {
 	}
 
 	rowid = insert(params, 0, 0);
-	printf("inserted @ RowId(%d:%d)\n", rowid.id, rowid.row);
 }
+
 
 void _select(RowId rowid, char **buf, int len) {
 	Buffer *b;
@@ -386,22 +367,20 @@ void _select(RowId rowid, char **buf, int len) {
 char *select_cmd_http(char *params) {
 	int pk;
 	Buffer *b;
-	char *buf, *baux;
+	char *buf;
 	DBHeader *dbh;
 	EntryHeader *eh;
 	RowId r;
 	char *ret;
 
 	if(!params) {
-		printf("select <id>\n");
-		return NULL;
+		return strdup("select <id>\n");
 	}
 
 	pk = atoi(params);
 	r = btree_get(pk);
 	if (!r.id && !r.row) {
-		printf("Arquivo não existe\n");
-		return NULL;
+		return strdup("Arquivo não existe\n");
 	}
 
 	DBG("%d @ %d:%d\n", pk, r.id, r.row);
@@ -410,15 +389,13 @@ char *select_cmd_http(char *params) {
 	eh = EH(dbh, r.row);
 
 	if (!eh->pk) {
-		printf("Documento não encontrado\n");
-		return NULL;
+		return strdup("Documento não encontrado\n");
 	}
 
 	buf = malloc(eh->offset + 1);
 	memcpy(buf, &b->datablock[eh->init], eh->offset);
 	buf[eh->offset] = 0;
 
-	printf("primeiro copy feito\n");
 	if (*(int *)&eh->next != 0)
 		_select(eh->next, &buf, eh->offset);
 
@@ -432,7 +409,7 @@ char *select_cmd_http(char *params) {
 void select_cmd(char *params) {
 	int pk;
 	Buffer *b;
-	char *buf, *baux;
+	char *buf;
 	DBHeader *dbh;
 	EntryHeader *eh;
 	RowId r;
@@ -463,7 +440,6 @@ void select_cmd(char *params) {
 	memcpy(buf, &b->datablock[eh->init], eh->offset);
 	buf[eh->offset] = 0;
 
-	printf("primeiro copy feito\n");
 	if (*(int *)&eh->next != 0)
 		_select(eh->next, &buf, eh->offset);
 
@@ -474,14 +450,14 @@ void select_cmd(char *params) {
 
 char *get_entry(int pk) {
 	Buffer *b;
-	char *buf, *baux;
+	char *buf;
 	DBHeader *dbh;
 	EntryHeader *eh;
 	RowId r;
 
 	r = btree_get(pk);
 	if (!r.id && !r.row) {
-		printf("Arquivo não existe\n");
+		//printf("Arquivo não existe\n");
 		return NULL;
 	}
 
@@ -490,7 +466,7 @@ char *get_entry(int pk) {
 	eh = EH(dbh, r.row);
 
 	if (!eh->pk) {
-		printf("Documento não encontrado\n");
+		//printf("Documento não encontrado\n");
 		return NULL;
 	}
 
@@ -498,10 +474,8 @@ char *get_entry(int pk) {
 	memcpy(buf, &b->datablock[eh->init], eh->offset);
 	buf[eh->offset] = 0;
 
-	printf("primeiro copy feito\n");
 	if (*(int *)&eh->next != 0)
 		_select(eh->next, &buf, eh->offset);
-
 
 	return buf;
 }
@@ -525,7 +499,7 @@ char *search_cmd_http(char *params) {
 	char *aux, *aux2;
 
 	if (!conf.table)
-		return NULL;
+		return strdup("0 documentos\n");
 
 	b = get_datablock(conf.table);
 	do {
@@ -568,6 +542,10 @@ char *search_cmd_http(char *params) {
 			g_free(aux2);
 		}
 	}
+
+	aux2 = ret;
+	ret = g_strdup_printf("%s%u documentos\n", ret ? ret : "", g_list_length(l));
+	g_free(aux2);
 
 	g_list_free_full(l, free_table_entry);
 
@@ -709,7 +687,6 @@ void load_cmd(char *params) {
 	size_t linecap = 0;
 	ssize_t linelen;
 
-	printf("Oppening %s\n", params);
 	fp = fopen(params, "r+");
 	if (!fp) {
 		perror("Oppening file");
@@ -728,7 +705,6 @@ void load_cmd(char *params) {
 }
 
 void update_cmd_http(char *pk, char *json) {
-	printf("id = %s, json = %s\n", pk, json);
 	if (delete_without_btree(pk))
 		insert_with_id(atoi(pk), json);
 }
@@ -749,7 +725,6 @@ void update_cmd(char *params) {
 		return;
 	}
 
-	printf("id = %s, json = %s\n", cid, json);
 	if (delete_without_btree(cid))
 		insert_with_id(atoi(cid), json);
 }

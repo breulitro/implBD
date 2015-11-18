@@ -203,12 +203,6 @@ int main(int argc, char *argv[]) {
 	// Inicializa as estruturas de controle do programa.
 	init_database();
 
-#if BTEST
-	for (int i = 1; i < 200; i++)
-		btree_insert(i, 6, 3);
-	btree_dump();
-#endif
-
 	if (argc == 2) {
 		do_server(atoi(argv[1]));
 	}
