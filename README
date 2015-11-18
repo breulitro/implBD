@@ -1,25 +1,2 @@
-Professor,
-
-Para buildar é necessário ter instaladas as bibliotecas:
-	- GLib
-	- GNU Readline
-	- Pthreads
-
-Existem 3 targets, o default, debug (que ta verborrágico prá caralho!) e btest (que seta o D da Btree prá 2)
-
-Para rodar com o servidor, basta executar o comando "./sgbd <port>".
-Se rodar sem parâmetros ele não roda o servidor e apresenta apenas a CLI.
-O servidor gera um arquivo de log "server.log"
-
-A documentação da RESTfull API está no cabeçalho do arquivo "restfullapi.c"
-Para testar a API basta rodar o comando "./sgbd-client <port>".
-O cliente tem suporte apenas para localhost, embora o sgbd aceite conexões remotas.
-
-O merge da btree não foi implementado pois perdi a aula em que o senhor explicou essa matéria.
-Tentei ler o pdf que foi disponibilizado no moodle mas não obtive sucesso em compreende-lo...
-Acho que vou implementá-lo nas férias. Preciso tirar 8.3 na PS da Beatriz prá ter média prá G2 :)
-O delete da btree apenas remove o elemento do nodo folha.
-O insert da btree utiliza uma heurística para simplificar o algoritmo.
-
-Acho que é isso. Qualquer dúvida pode me enviar por email benitomichelon@gmail.com
-Abraço, obrigado pela diversão que o senhor me proporcionou e boa correção!
+Ahá! Achei que o senhor não iria abrir este arquivo :)
+O que o senhor procura está no arquivo IGNOREME.
