@@ -29,13 +29,22 @@ void help() {
 			"\t- load <file>\n"
 			"\t- persist : zera o buffer e salva todos os datablocks sujos\n"
 			"\t- status : printa informações de configuração do sistema\n"
-			"\t- btreedump : printa a btree (recomendado buildar com \"make btest\"\n"
+			"\t- btreedump : printa a btree (recomendado buildar com \"make btest\")\n"
 			"\t- exit | quit\n"
 			"\t- help\n");
 }
 
 void print_status() {
-	printf("TBD: printar D da btree, nextpk, datablocks livres, etc...\n");
+	printf("Temos %d datablocks livres\n", g_list_length(free_blocks));
+	printf("NextPk = %d\n", conf.nextpk);
+	printf("Btree+ root @ %u\n", conf.root);
+	printf("Table root @ %u\n", conf.table);
+	printf("BRANCH_D = %lu, LEAF_D = %lu\n", BRANCH_D, LEAF_D);
+	printf("Tamanho das estruturas da Btree+:\n"
+			"\tBTHeader = %lu\n"
+			"\tBTBNode = %lu\n"
+			"\tBTLNode = %lu\n",
+			sizeof(BTHeader), sizeof(BTBNode), sizeof(BTLNode));
 }
 
 void parse_cmds(char *full_cmd) {
@@ -193,7 +202,6 @@ int main(int argc, char *argv[]) {
 	atexit(_atexit);
 	// Inicializa as estruturas de controle do programa.
 	init_database();
-	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
 #if BTEST
 	for (int i = 1; i < 200; i++)
