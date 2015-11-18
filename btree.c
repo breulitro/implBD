@@ -160,7 +160,8 @@ void _btree_dump(uint16_t id, int padding) {
 	else {
 		for (i = 0; i < bth->len; i++) {
 			br = BR(bth, i);
-			_btree_dump(br->menor, padding + 1);
+			if (!i)
+				_btree_dump(br->menor, padding + 1);
 			for (p = 0; p < padding; p++)
 				printf("\t");
 			printf("%d\n", br->pk);
@@ -196,6 +197,12 @@ void _btree_update_parent(uint16_t id, uint16_t parent) {
 	b = get_datablock(id);
 	bth = (BTHeader *) b->datablock;
 	bth->parent = parent;
+	if (bth->type == BRANCH)
+		for (int i = 0; i < bth->len; i++) {
+			br = BR(bth, i);
+			_btree_update_parent(br->menor, id);
+			_btree_update_parent(br->maior, id);
+		}
 }
 
 void btree_update_parent(uint16_t id) {
@@ -288,12 +295,15 @@ void btree_branch_split(uint16_t id) {
 		newroot->dirty = 1;
 		// Apontamento dos parents
 		bth->parent = nbth->parent = i;
+		btree_update_parent(rbr->menor);
 		btree_update_parent(rbr->maior);
 		conf.root = i;
 		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
 	} else {
 		nbth->parent = bth->parent;
-		btree_insert_branch(bth->parent, nbr->pk, b->id, newb->id);
+		br = BR(bth, BRANCH_D);
+		btree_insert_branch(bth->parent, br->pk, b->id, newb->id);
+		btree_update_parent(bth->parent);
 	}
 }
 
@@ -379,6 +389,8 @@ void btree_leaf_split(uint16_t id) {
 		// Apontamento dos parents
 		bth->parent = nbth->parent = i;
 		rbth->parent = 0;
+		btree_update_parent(br->menor);
+		btree_update_parent(br->maior);
 		conf.root = i;
 		DBG("Novo nodo raiz(datablock = %d) criado\n", i);
 	} else {
@@ -387,6 +399,7 @@ void btree_leaf_split(uint16_t id) {
 		printf("parent = %d\n", bth->parent);
 		nbth->parent = bth->parent;
 		btree_insert_branch(bth->parent, nlf->pk, b->id, newb->id);
+		btree_update_parent(bth->parent);
 	}
 	//conf.root = newroot->id;
 }
