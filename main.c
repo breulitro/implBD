@@ -9,12 +9,15 @@
 #include <readline/history.h>
 #include <string.h>
 #include <ctype.h>
+#include <pthread.h>
+#include <assert.h>
 
 #include "bufmgmt.h"
 #include "btree.h"
 #include "restfullapi.h"
 
 char running_cli = 0;
+pthread_t th;
 
 void help() {
 	printf("Comandos disponiveis:\n"
@@ -158,7 +161,7 @@ void do_cli() {
 }
 
 void do_server(int port) {
-	run_server(port);
+	assert(pthread_create(&th, NULL, &run_server, &port) == 0);
 }
 
 int main(int argc, char *argv[]) {
@@ -187,9 +190,10 @@ int main(int argc, char *argv[]) {
 
 	if (argc == 2) {
 		do_server(atoi(argv[1]));
-	} else {
-		do_cli();
 	}
+
+	do_cli();
+
 #if 0
 	btree_insert(1, 1, 3);
 	btree_insert(2, 2, 3);
@@ -218,5 +222,8 @@ int main(int argc, char *argv[]) {
 	return 0;
 #endif
 
+	server_running = 0;
+	pthread_cancel(th);
+	pthread_join(th, NULL);
 	return 0;
 }

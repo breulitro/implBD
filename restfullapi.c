@@ -19,6 +19,15 @@
 #include "http.h"
 #include "bufmgmt.h"
 
+FILE *serverlog;
+
+#define LOG(fmt, ...) {\
+			fprintf(serverlog, fmt, ##__VA_ARGS__);\
+			fflush(serverlog);\
+			}
+
+char server_running = 1;
+
 void parse_http(int client) {
 	char buf[1024];
 	char method[255];
@@ -36,8 +45,7 @@ void parse_http(int client) {
 	}
 	method[i] = '\0';
 
-	printf("Chegou um %s\n", method);
-	printf("%s\n", buf);
+	LOG("%s\n", buf);
 
 	if (!strcasecmp(method, "DELETE")) {
 		aux = strchr(buf, '/');
@@ -66,6 +74,7 @@ void parse_http(int client) {
 		get_line(client, p, j);
 		aux = strchr(p, '=');
 		aux++;
+		LOG("inserindo: %s\n", aux);
 		insert_cmd(aux);
 		httpok(client);
 	} else if (!strcasecmp(method, "PATCH")) {
@@ -92,7 +101,7 @@ void parse_http(int client) {
 		}
 
 		get_line(client, p, j);
-		printf("Chegou no PATCH #%s#\n", p);
+		LOG("Update %s: %s\n", pk, p);
 		update_cmd_http(pk, p);
 		g_free(pk);
 		httpok(client);
@@ -101,7 +110,7 @@ void parse_http(int client) {
 			aux = strstr(buf, "/search/");
 			aux += strlen("/search/");
 			aux = strtok(aux, " ");
-			printf("Tenho que buscar #%s#\n", aux);
+			LOG("Search: %s\n", aux);
 			ret = search_cmd_http(aux);
 
 			if (ret)
@@ -119,6 +128,7 @@ void parse_http(int client) {
 			aux = strchr(buf, '/');
 			aux++;
 			pk = strtok(aux, " ");
+			LOG("Select: %s\n", pk);
 			ret = select_cmd_http(pk);
 			if (ret)
 				aux = g_strdup_printf("HTTP/1.1 200 OK\r\n"
@@ -138,32 +148,39 @@ void parse_http(int client) {
 
 
 /**********************************************************************/
-void run_server(int port) {
+void *run_server(void *arg) {
 	int server_sock = -1;
 	int client_sock = -1;
 	struct sockaddr_in client_name;
 	int client_name_len = sizeof(client_name);
+	int port = *(int *) arg;
+
+	serverlog = fopen("server.log", "w");
 
 	server_sock = startup(&port);
 
 	if (server_sock < 0) {
-		printf("Startup error\n");
-		return;
+		LOG("Startup error\n");
+		return NULL;
 	}
 
-	printf("LogicalResource running on port %d\n", port);
+	LOG("LogicalResource running on port %d\n", port);
 
 	do {
 		client_sock = accept(server_sock, (struct sockaddr *)&client_name, (socklen_t *)&client_name_len);
 
 		if (client_sock == -1) {
-			perror("accept");
-			return;
+			LOG("accept");
+			return NULL;
 		}
 
 		parse_http(client_sock);
 		close(client_sock);
-	} while (1);
+	} while (server_running);
 
 	close(server_sock);
+
+	fclose(serverlog);
+
+	return NULL;
 }

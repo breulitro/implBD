@@ -17,7 +17,7 @@ void _btree_delete(int pk, int id) {
 
 	b = get_datablock(id);
 	bth = (BTHeader *)b->datablock;
-	printf("btree->len = %d\n", bth->len);
+	DBG("btree->len = %d\n", bth->len);
 
 	if (bth->type == LEAF) {
 		for (int i = 0; i < bth->len; i++) {
@@ -33,7 +33,7 @@ void _btree_delete(int pk, int id) {
 			}
 		}
 
-		printf("pk(%d) não encontrada na btree\n", pk);
+		DBG("pk(%d) não encontrada na btree\n", pk);
 	} else {
 		// TODO: Buscar nodo e deletar o pk dele
 		for (int i = 0; i < bth->len; i++) {
@@ -46,7 +46,7 @@ void _btree_delete(int pk, int id) {
 	}
 
 	// Se é igual, é pq é o último
-	printf("btree->len = %d\n", bth->len);
+	DBG("btree->len = %d\n", bth->len);
 }
 
 void btree_delete(int pk) {
