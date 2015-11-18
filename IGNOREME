@@ -21,5 +21,8 @@ Acho que vou implementá-lo nas férias. Preciso tirar 8.3 na PS da Beatriz prá
 O delete da btree apenas remove o elemento do nodo folha.
 O insert da btree utiliza uma heurística para simplificar o algoritmo.
 
-Acho que é isso. Qualquer dúvida pode me enviar por email benitomichelon@gmail.com
+Tem um arquivo "json.txt" com 8 documentos que ocupam vários datablocks e tem também um script python
+que recebe um número N como parâmetro e gera N documentos json.
+
+Acho que é isso. Qualquer dúvida pode me enviar email para benitomichelon@gmail.com
 Abraço, obrigado pela diversão que o senhor me proporcionou e boa correção!
