@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <glib.h>
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096
@@ -74,6 +75,9 @@ void search_cmd(char *params);
 void select_cmd(char *params);
 void insert_cmd(char *params);
 void update_cmd(char *params);
+void update_cmd_http(char *pk, char *json);
+char *search_cmd_http(char *params);
+char *select_cmd_http(char *params);
 Buffer *get_datablock(int id);
 uint16_t get_free_datablock_id();
 void persist();

@@ -382,7 +382,52 @@ void _select(RowId rowid, char **buf, int len) {
 	}
 }
 
-// WARN: Não é feita verificação se existe realmente o RowId em questão
+char *select_cmd_http(char *params) {
+	int pk;
+	Buffer *b;
+	char *buf, *baux;
+	DBHeader *dbh;
+	EntryHeader *eh;
+	RowId r;
+	char *ret;
+
+	if(!params) {
+		printf("select <id>\n");
+		return NULL;
+	}
+
+	pk = atoi(params);
+	r = btree_get(pk);
+	if (!r.id && !r.row) {
+		printf("Arquivo não existe\n");
+		return NULL;
+	}
+
+	DBG("%d @ %d:%d\n", pk, r.id, r.row);
+	b = get_datablock(r.id);
+	dbh = DBH(b->datablock);
+	eh = EH(dbh, r.row);
+
+	if (!eh->pk) {
+		printf("Documento não encontrado\n");
+		return NULL;
+	}
+
+	buf = malloc(eh->offset + 1);
+	memcpy(buf, &b->datablock[eh->init], eh->offset);
+	buf[eh->offset] = 0;
+
+	printf("primeiro copy feito\n");
+	if (*(int *)&eh->next != 0)
+		_select(eh->next, &buf, eh->offset);
+
+
+	ret = g_strdup_printf("%d | %s\n", eh->pk, buf);
+	free(buf);
+
+	return ret;
+}
+
 void select_cmd(char *params) {
 	int pk;
 	Buffer *b;
@@ -467,6 +512,67 @@ void free_table_entry(gpointer data) {
 	g_free(te);
 }
 
+char *search_cmd_http(char *params) {
+	Buffer *b;
+	DBHeader *dbh;
+	EntryHeader *eh;
+	TableEntry *te;
+	GList *x, *l = NULL;
+	uint16_t i;
+	char *json;
+	char *ret = NULL;
+	char *aux, *aux2;
+
+	if (!conf.table)
+		return NULL;
+
+	b = get_datablock(conf.table);
+	do {
+		dbh = DBH(b->datablock);
+		for (i = 1; i <= dbh->header_len; i++) {
+			eh = EH(dbh, i);
+
+			//Caso o documento tenha sido deletado, ignora a EntryHeader
+			if (!eh->pk)
+				continue;
+
+			json = get_entry(eh->pk);
+			if (!json)
+				continue;
+
+			if (strstr(json, params)) {
+				te = malloc(sizeof(TableEntry));
+				te->json = json;
+				te->pk = eh->pk;
+				l = g_list_append(l, te);
+			} else
+				g_free(json);
+		}
+
+		if (dbh->next)
+			b = get_datablock(dbh->next);
+		else
+			b = NULL;
+
+	} while(b);
+
+	for (x = g_list_first(l); x; x = x->next) {
+		te = x->data;
+		aux = g_strdup_printf("%d | %s\n", te->pk, te->json);
+		if (!ret)
+			ret = aux;
+		else {
+			aux2 = ret;
+			ret = g_strconcat(ret, aux, NULL);
+			g_free(aux2);
+		}
+	}
+
+	g_list_free_full(l, free_table_entry);
+
+	return ret;
+}
+
 void search_cmd(char *params) {
 	Buffer *b;
 	DBHeader *dbh;
@@ -475,6 +581,9 @@ void search_cmd(char *params) {
 	GList *x, *l = NULL;
 	uint16_t i;
 	char *json;
+
+	if (!conf.table)
+		return;
 
 	b = get_datablock(conf.table);
 	do {
@@ -569,26 +678,28 @@ void delete_cmd(char *params) {
 	btree_delete(pk);
 }
 
-void delete_without_btree(char *params) {
+char delete_without_btree(char *params) {
 	Buffer *b;
 	int pk;
 	RowId r;
 
 	if (!params || strlen(params) == 0) {
 		printf("delete <id>\n");
-		return;
+		return 0;
 	}
 
 	pk = atoi(params);
 	r = btree_get(pk);
 	if (!r.id && !r.row) {
 		printf("Arquivo não existe\n");
-		return;
+		return 0;
 	}
 
 	b = get_datablock(r.id);
 	b->dirty = 1;
 	delete(b->datablock, r.row);
+
+	return 1;
 }
 
 void load_cmd(char *params) {
@@ -615,6 +726,12 @@ void load_cmd(char *params) {
 	fclose(fp);
 }
 
+void update_cmd_http(char *pk, char *json) {
+	printf("id = %s, json = %s\n", pk, json);
+	if (delete_without_btree(pk))
+		insert_with_id(atoi(pk), json);
+}
+
 void update_cmd(char *params) {
 	char *json;
 	char *cid;
@@ -632,6 +749,6 @@ void update_cmd(char *params) {
 	}
 
 	printf("id = %s, json = %s\n", cid, json);
-	delete_without_btree(cid);
-	insert_with_id(atoi(cid), json);
+	if (delete_without_btree(cid))
+		insert_with_id(atoi(cid), json);
 }
