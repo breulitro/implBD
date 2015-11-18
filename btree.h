@@ -27,14 +27,13 @@ typedef struct {
 	RowId rowid;
 } BTLNode;
 
-#if 0
-// Desconta o Header da BTree + 1 Nodo para permitir a inserção do 2d+1-ésimo elemento
-#define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(uint16_t))) / 2)
-#define LEAF_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTLNode)) / sizeof(BTLNode)) / 2)
+#if BTEST
+#	define BRANCH_D 2L
+#	define LEAF_D 2L
 #else
-// Para propósito de testes, até estabilizar a BTree+
-#define BRANCH_D 2L
-#define LEAF_D 2L
+// Desconta o Header da BTree + 1 Nodo para permitir a inserção do 2d+1-ésimo elemento
+#	define BRANCH_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTBNode)) / (sizeof(BTBNode) - sizeof(uint16_t))) / 2)
+#	define LEAF_D (((DATABLOCK - sizeof(BTHeader) - sizeof(BTLNode)) / sizeof(BTLNode)) / 2)
 #endif
 
 #define BR(block, i) ((BTBNode *) ((i) ? ((char *)(block) + sizeof(BTHeader) + (i) * (sizeof(BTBNode) - sizeof(uint16_t))) : (char *)(block) + sizeof(BTHeader)))

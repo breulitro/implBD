@@ -20,17 +20,22 @@ char running_cli = 0;
 pthread_t th;
 
 void help() {
-	printf("Comandos disponiveis:\n"
+	printf("Comandos disponíveis:\n"
 			"\t- insert <json>\n"
 			"\t- update <id> <json>\n"
 			"\t- search <tag>\n"
 			"\t- select <pk>\n"
 			"\t- delete <pk>\n"
 			"\t- load <file>\n"
-			"\t- persist\n"
-			"\t- exit\n"
-			"\t- quit\n"
+			"\t- persist : zera o buffer e salva todos os datablocks sujos\n"
+			"\t- status : printa informações de configuração do sistema\n"
+			"\t- btreedump : printa a btree (recomendado buildar com \"make btest\"\n"
+			"\t- exit | quit\n"
 			"\t- help\n");
+}
+
+void print_status() {
+	printf("TBD: printar D da btree, nextpk, datablocks livres, etc...\n");
 }
 
 void parse_cmds(char *full_cmd) {
@@ -54,6 +59,8 @@ void parse_cmds(char *full_cmd) {
 		load_cmd(param);
 	else if (!(strcmp(cmd, "btreedump")))
 		btree_dump();
+	else if (!(strcmp(cmd, "status")))
+		print_status();
 	else if (!(strcmp(cmd, "persist"))) {
 		persist();
 		framesLen = 0;
@@ -63,7 +70,7 @@ void parse_cmds(char *full_cmd) {
 		printf("cmd unknown.\n");
 }
 
-char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump", "update", NULL};
+char *cmd[] = {"insert", "select", "search", "delete", "load", "persist", "help", "exit", "quit", "btreedump", "update", "status", NULL};
 
 char* cmd_generator(const char *text, int state) {
 	static int list_index, len;
@@ -188,71 +195,12 @@ int main(int argc, char *argv[]) {
 	init_database();
 	DBG("DBG: temos %d datablocks livres\n", g_list_length(free_blocks));
 
-#if 1
-	btree_insert(1, 1, 3);
-	btree_insert(2, 2, 3);
-	btree_insert(3, 3, 3);
-	btree_insert(4, 4, 3);
-	btree_insert(5, 5, 3);
+#if BTEST
+	for (int i = 1; i < 200; i++)
+		btree_insert(i, 6, 3);
 	btree_dump();
-	btree_insert(6, 6, 3);
-	btree_insert(7, 6, 3);
-	btree_dump();
-	btree_insert(8, 6, 3);
-	btree_insert(9, 6, 3);
-	btree_dump();
-	btree_insert(10, 6, 3);
-	btree_insert(11, 6, 3);
-	btree_dump();
-	btree_insert(12, 6, 3);
-	btree_insert(13, 6, 3);
-	btree_dump();
-	btree_insert(14, 6, 3);
-	btree_dump();
-	btree_insert(15, 6, 3);
-	btree_dump();
-	btree_insert(16, 6, 3);
-	btree_insert(17, 6, 3);
-	btree_dump();
-	btree_insert(18, 6, 3);
-	btree_insert(19, 6, 3);
-	btree_dump();
-	btree_insert(20, 6, 3);
-	btree_insert(21, 6, 3);
-	btree_insert(22, 6, 3);
-	btree_insert(23, 6, 3);
-	btree_insert(24, 6, 3);
-	btree_insert(25, 6, 3);
-	btree_insert(26, 6, 3);
-	btree_insert(27, 6, 3);
-	btree_insert(28, 6, 3);
-	btree_insert(29, 6, 3);
-	btree_insert(30, 6, 3);
-	btree_insert(31, 6, 3);
-	btree_insert(32, 6, 3);
-	btree_insert(33, 6, 3);
-	btree_insert(34, 6, 3);
-	btree_insert(35, 6, 3);
-	btree_insert(36, 6, 3);
-	btree_insert(37, 6, 3);
-	btree_insert(38, 6, 3);
-	btree_insert(39, 6, 3);
-	btree_insert(40, 6, 3);
-	btree_insert(41, 6, 3);
-	btree_insert(42, 6, 3);
-	btree_insert(43, 6, 3);
-	btree_insert(44, 6, 3);
-	btree_insert(45, 6, 3);
-	btree_insert(46, 6, 3);
-	btree_insert(47, 6, 3);
-	btree_insert(48, 6, 3);
-	btree_insert(49, 6, 3);
-	btree_insert(50, 6, 3);
-	btree_insert(51, 6, 3);
-	btree_insert(52, 6, 3);
-	btree_dump();
-	return 0;
 #endif
+
 	if (argc == 2) {
 		do_server(atoi(argv[1]));
 	}
