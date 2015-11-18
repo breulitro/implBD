@@ -1,3 +1,13 @@
+/*
+ * INSERT = POST /
+ * SELECT = GET /$pk
+ * UPDATE = PATCH /$pk
+ * DELETE = DELETE /$pk
+ * SEARCH = GET /search/$tag
+ *
+ * obs: no UPDATE e no INSERT, o json vem no corpo do comando
+ */
+
 #include <stdio.h>
 #include <ctype.h>
 #include <strings.h>
