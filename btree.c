@@ -83,16 +83,17 @@ RowId btree_branch_get(uint16_t id, int pk) {
 
 	for (i = 0; i < bth->len; i++) {
 		br = BR(bth, i);
-		if (br->pk < pk) {
+		if (pk > br->pk) {
 			continue;
-		} else {
+		} else if (pk < br->pk) {
 			b = get_datablock(br->menor);
 			bth = (BTHeader *) b->datablock;
 			if (bth->type == LEAF)
 				return btree_leaf_get(b->id, pk);
 			else
 				return btree_branch_get(b->id, pk);
-		}
+		} else /* pk == br->pk */
+			break;
 	}
 
 	b = get_datablock(br->maior);
