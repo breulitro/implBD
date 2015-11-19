@@ -69,10 +69,12 @@ Buffer *get_datablock(int id) {
 	// Caso framebuffer estiver cheio
 	DBG("frames cheio\n");
 
-	while (frames[vitima].used)
-		frames[vitima++].used = 0;
+	while (frames[vitima].used) {
+		frames[vitima].used = 0;
+		vitima = (vitima + 1) % 256;
+	}
 
-	DBG("Vitima é o frame %d - id = %d\n", vitima, frames[vitima].id);
+	printf("Vitima é o frame %d - id = %d\n", vitima, frames[vitima].id);
 
 	// Se buffer tiver sido alterado, salva ele (write back policy)
 	if (frames[vitima].dirty) {
