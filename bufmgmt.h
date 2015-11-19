@@ -63,7 +63,6 @@ typedef struct {
 
 extern Buffer frames[256];
 extern int framesLen;
-extern int vitima;
 extern int miss;
 extern int hit;
 extern GList *free_blocks;

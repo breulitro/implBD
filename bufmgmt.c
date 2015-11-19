@@ -15,7 +15,7 @@
 
 Buffer frames[256];
 int framesLen = 0;
-int vitima = 0;
+uint8_t vitima = 0;
 int miss = 0;
 int hit = 0;
 GList *free_blocks = NULL;
@@ -70,8 +70,8 @@ Buffer *get_datablock(int id) {
 	DBG("frames cheio\n");
 
 	while (frames[vitima].used) {
-		frames[vitima].used = 0;
-		vitima = (vitima + 1) % 256;
+		frames[vitima++].used = 0;
+		//vitima = (vitima + 1) % 256;
 	}
 
 	printf("Vitima é o frame %d - id = %d\n", vitima, frames[vitima].id);
