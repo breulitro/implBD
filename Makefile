@@ -16,4 +16,4 @@ btest:
 	rm -f .datafile
 
 clean:
-	rm -f sgbd .datafile
+	rm -rf sgbd* .datafile server.log
