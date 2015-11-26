@@ -320,7 +320,7 @@ RowId insert(char *json, char chained, int pk) {
 void insert_with_id(int pk, char *json) {
 	RowId rowid;
 	rowid = insert(json, 0, pk);
-	DBG("inserted %d @ RowId(%d:%d)\n", pk, rowid.id, rowid.row);
+	printf("inserted %d @ RowId(%d:%d)\n", pk, rowid.id, rowid.row);
 	btree_update(pk, rowid);
 }
 
@@ -340,6 +340,7 @@ void insert_cmd(char *params) {
 	}
 
 	rowid = insert(params, 0, 0);
+	printf("inserted %d @ RowId(%d:%d)\n", conf.nextpk - 1, rowid.id, rowid.row);
 }
 
 

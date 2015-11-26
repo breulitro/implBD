@@ -8,6 +8,6 @@ if len(sys.argv) < 2:
 
 for i in range(int(sys.argv[1])):
 	data = {}
-	data['key'] = 'value' + str(i)
+	data['key'] = 'value' + str(i + 1)
 	json_data = json.dumps(data)
 	print json_data

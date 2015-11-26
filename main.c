@@ -35,6 +35,7 @@ void help() {
 }
 
 void print_status() {
+	printf("Cache hit = %d, Cache miss = %d\n", hit, miss);
 	printf("Temos %d datablocks livres\n", g_list_length(free_blocks));
 	printf("NextPk = %d\n", conf.nextpk);
 	printf("Btree+ root @ %u\n", conf.root);
