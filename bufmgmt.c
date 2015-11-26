@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <strings.h>
 #include <assert.h>
 #include <glib.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <ctype.h>
+#include <inttypes.h>
 //#include <unistd.h>
 //#include <sys/stat.h>
 //#include <fcntl.h>
@@ -137,7 +139,8 @@ void create_database() {
 		perror("Criando datafile"), exit(1);
 
 	// Escrevendo configuração
-	bzero(&conf, sizeof(Config));
+	//bzero(&conf, sizeof(Config));
+	memset(&conf, 0, sizeof(Config));
 	conf.nextpk = 1;
 
 	// Seta como usado os buffers iniciais utilizados para a configuração

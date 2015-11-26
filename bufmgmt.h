@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <glib.h>
+#include <inttypes.h>
 
 #define FILESIZE 268435456 // 256 * 1024 * 1024
 #define DATABLOCK 4096

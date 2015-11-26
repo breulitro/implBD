@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <strings.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <netinet/in.h>

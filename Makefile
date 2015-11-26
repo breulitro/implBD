@@ -1,4 +1,4 @@
-FLAGS = `pkg-config --cflags --libs glib-2.0` -lreadline -lpthread
+FLAGS = `pkg-config --cflags --libs glib-2.0` -lreadline -lpthread -std=c99 -D_XOPEN_SOURCE=700
 
 all:
 	gcc -Wall main.c http.c restapi.c btree.c bufmgmt.c -g $(FLAGS) -o sgbd

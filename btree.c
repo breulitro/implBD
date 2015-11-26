@@ -224,7 +224,7 @@ void btree_branch_split(uint16_t id) {
 
 	// Aloca novo nodo branch
 	l = g_list_first(free_blocks);
-	i = (int)l->data;
+	i = *(int *)l->data;
 	free_blocks = g_list_delete_link(free_blocks, l);
 	SET_USED(conf.bitmap, i);
 	newb = get_datablock(i);
@@ -330,7 +330,7 @@ void btree_leaf_split(uint16_t id) {
 
 	// Aloca novo nodo folha
 	l = g_list_first(free_blocks);
-	i = (int)l->data;
+	i = *(int *)l->data;
 	free_blocks = g_list_delete_link(free_blocks, l);
 	SET_USED(conf.bitmap, i);
 	newb = get_datablock(i);
